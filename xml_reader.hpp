@@ -88,7 +88,7 @@ namespace mpd {
 			// Optional. Called or each tag. If this is not provided, but there is a parameter,
 			// the parser will throw an unexpected_node. Overrides are encouraged to
 			// move from the name and value parameters rather than copying.
-			void read_attribute(attribute_reader& reader, std::string&& name, std::string&& value)
+			void read_attribute(attribute_reader& reader, const std::string& name, std::string&& value)
 			{ reader.throw_unexpected(); }
 			// Optional IFF the Parser also fullfills element_parser_t. Called when there are no more
 			// attributes. It should return the parser to use for parsing child Nodes.
@@ -145,6 +145,11 @@ namespace mpd {
 			malformed_xml(const char* message) : invalid_xml(message) {}
 			malformed_xml(const std::string& message) : invalid_xml(message) {}
 			malformed_xml(std::string&& message) : invalid_xml(std::move(message)) {}
+		};
+		struct duplicate_attribute : public malformed_xml {
+			duplicate_attribute(const char* message) : malformed_xml(message) {}
+			duplicate_attribute(const std::string& message) : malformed_xml(message) {}
+			duplicate_attribute(std::string&& message) : malformed_xml(std::move(message)) {}
 		};
 		struct unexpeced_eof : public malformed_xml {
 			unexpeced_eof(const char* message) : malformed_xml(message) {}
@@ -229,7 +234,7 @@ namespace mpd {
 		{ return reader_->read_element(std::forward<element_parser_t>(parser), impl::special_{}); }
 
 		struct IgnoredXmlParser {
-			void read_attribute(attribute_reader&, std::string&&, std::string) {}
+			void read_attribute(attribute_reader&, const std::string&, std::string) {}
 			void read_node(element_reader& reader, node_type type, std::string&& ) 
 			{if (type == node_type::element_node) reader.read_element(*this); }
 			std::nullptr_t end_element(element_reader&) { return nullptr; }

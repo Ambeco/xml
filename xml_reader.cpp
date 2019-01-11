@@ -111,7 +111,7 @@ namespace mpd {
 				switch (position.state) {
 				case parse_state::document_begin: return "document start";
 				case parse_state::after_tag_name: return position.tag_name + " open tag";
-				case parse_state::after_attribute: return attribute.first + " attribute with value " + attribute.second.substr(0, 25);
+				case parse_state::after_attribute: return attribute_set[attribute_count-1] + " attribute with value " + node.second.substr(0, 25);
 				case parse_state::before_tag_finish: return position.tag_name + " content begin";
 				case parse_state::after_open_tag: return position.tag_name + " details";
 				case parse_state::document_end: return "document end";
@@ -155,9 +155,6 @@ namespace mpd {
 			void reader::throw_invalid_content(const char* details) {
 				throw invalid_content(get_location_for_exception() + ": ERROR: " + (details != nullptr ? details : "invalid_content"));
 			}
-			void reader::throw_invalid_xml(const char* details) {
-				throw invalid_xml(get_location_for_exception() + ": ERROR: " + (details != nullptr ? details : "invalid_xml"));
-			}
 			void reader::throw_invalid_read_call(const char* details) {
 				throw invalid_read_call_error(get_location_for_exception() + ": ERROR: " + (details != nullptr ? details : "invalid_read_call_error"));
 			}
@@ -170,6 +167,9 @@ namespace mpd {
 			void reader::throw_unexpeced_eof(const char* details) {
 				throw unexpeced_eof(get_location_for_exception() + ": ERROR: " + (details != nullptr ? details : "unexpeced_eof"));
 			}
+			void reader::throw_duplicate_attribute(const char* details) {
+				throw duplicate_attribute(get_location_for_exception() + ": ERROR: " + (details != nullptr ? details : "duplicate attribute"));
+			}
 			bool reader::next_attribute() {
 				assert(position.state == parse_state::after_tag_name || position.state == parse_state::after_attribute);
 				skip_ws();
@@ -178,7 +178,11 @@ namespace mpd {
 					position.state = parse_state::before_tag_finish;
 					return false;
 				}
-				read_name(attribute.first);
+				if (attribute_set.size() == attribute_count) attribute_set.resize(attribute_count + 1);
+				read_name(attribute_set[attribute_count]);
+				auto dup_iter = std::find(attribute_set.begin(), attribute_set.begin() + attribute_count, attribute_set[attribute_count]);
+				if (dup_iter != attribute_set.begin() + attribute_count) throw_duplicate_attribute("duplicate attribute " + attribute_set[attribute_count]);
+				++attribute_count;
 				skip_ws();
 				affirm_next_char('=', 0, "missing = after attribute_name");
 				skip_ws();
@@ -280,7 +284,7 @@ namespace mpd {
 				throw_unexpeced_eof("while parsing name " + out.substr(0, 20));
 			};
 			void reader::read_attr(char quote) {
-				attribute.second.clear();
+				node.second.clear();
 				do {
 					while(buffer_idx<buffer.size()) {
 						char c = buffer[buffer_idx];
@@ -288,14 +292,14 @@ namespace mpd {
 							consume_nonws();
 							return;
 						} else if (c == '&') {
-							consume_escape(attribute.second);
+							consume_escape(node.second);
 						} else if (c == '<') {
 							throw_invalid_content("attribute cannot contain <");
 						} else 
-							attribute.second.append(1, consume_maybe_ws());
+							node.second.append(1, consume_maybe_ws());
 					}
 				} while (!at_eof());
-				throw_unexpeced_eof("while parsing attribute " + attribute.first);
+				throw_unexpeced_eof("while parsing attribute " + attribute_set[attribute_count-1]);
 			};
 			void reader::read_string() {
 				assert(buffer[buffer_idx] != '<' && !is_whitespace(buffer[buffer_idx]));
@@ -466,7 +470,7 @@ namespace mpd {
 					in_bytes += in_bytes;
 				}
 				if (code_point == -1) {
-					throw_invalid_xml(std::string(deescape_ptr, in_bytes) + " is not a recognized escape sequence");
+					throw_malformed_xml(std::string(deescape_ptr, in_bytes) + " is not a recognized escape sequence");
 				}
 				append_utf8(code_point, out);
 				position.column += in_bytes;

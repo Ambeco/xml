@@ -27,7 +27,7 @@ struct three_parser {
 
 	three begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, std::string&& name, std::string&& value)
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{
 		if (name == "attr1") {
 			if (attr1.has_value()) reader.throw_unexpected();
@@ -59,7 +59,7 @@ struct two_parser {
 
 	two begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, std::string&& name, std::string&& value)
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{
 		if (name == "attr1") {
 			if (attr1.has_value()) reader.throw_unexpected();
@@ -99,7 +99,7 @@ struct one_parser {
 
 	one begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, std::string&& name, std::string&& value)
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{
 		if (name == "attr1") {
 			if (attr1.has_value()) reader.throw_unexpected();

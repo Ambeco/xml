@@ -45,11 +45,12 @@ namespace mpd {
 					parse_pos(std::in_place_type_t<read_buff_t> name, Us&&...us) :read_buf(name, std::forward<Us>(us)...) {}
 				} position;
 				std::string source_name_;
-				std::pair<std::string, std::string> attribute;
 				std::pair<node_type, std::string> node;
 				std::string buffer;
 				std::size_t buffer_idx = 0;
 				std::size_t escape_end_idx = 0;
+				std::vector<std::string> attribute_set; //never decreases in size to avoid repeated allocations
+				std::size_t attribute_count;
 			public:
 				//Get the current Location
 				std::string get_location_for_exception();
@@ -88,6 +89,7 @@ namespace mpd {
 					if (position.state != parse_state::after_tag_name) throw_invalid_read_call("called read_attributes, but not at the beginning of a tag");
 					parse_pos saved_pos(position);
 					try {
+						attribute_count = 0;
 						while (next_attribute())
 							read_attribute(parser, special_{});
 						return read_contents(start_element(std::forward<attribute_parser_t>(parser), special_{}));
@@ -122,10 +124,11 @@ namespace mpd {
 				}
 
 				template<class attribute_parser_t>//, typename identity<decltype(attribute_parser_t::read_attribute)>::type = 0>
-				auto read_attribute(attribute_parser_t& parser, special_) -> decltype(parser.read_attribute(*this, std::move(attribute.first), std::move(attribute.second)))
+				auto read_attribute(attribute_parser_t& parser, special_)
+					//-> decltype(parser.read_attribute(*this, const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second)))
 				{
 					post_condition condition(this, parse_state::after_attribute, "parser.read_attribute somehow did something invalid"); 
-					return parser.read_attribute(*this, std::move(attribute.first), std::move(attribute.second));
+					return parser.read_attribute(*this, const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second));
 				}
 				template<class attribute_parser_t>
 				void read_attribute(attribute_parser_t&, general_)
@@ -148,17 +151,18 @@ namespace mpd {
 					, element_reader(*this)
 					, position(name, std::forward<Us>(us)...)
 					, source_name_(std::move(source_name))
+					, attribute_count(0)
 				{ }
 				std::string get_parse_state_name();
 				std::string get_node_type_string(node_type type, const std::string& name, const std::string& content);
-				void throw_invalid_xml(const char* details = nullptr);
-				void throw_invalid_xml(const std::string& details) { throw_invalid_xml(details.c_str()); }
 				void throw_invalid_read_call(const char* details = nullptr);
 				void throw_invalid_read_call(const std::string& details) { throw_invalid_read_call(details.c_str()); }
 				void throw_invalid_parser(const char* details = nullptr);
 				void throw_invalid_parser(const std::string& details) { throw_invalid_parser(details.c_str()); }
 				void throw_malformed_xml(const char* details = nullptr);
 				void throw_malformed_xml(const std::string& details) { throw_malformed_xml(details.c_str()); }
+				void throw_duplicate_attribute(const char* details = nullptr);
+				void throw_duplicate_attribute(const std::string& details) { throw_duplicate_attribute(details.c_str()); }
 				void throw_unexpeced_eof(const char* details = nullptr);
 				void throw_unexpeced_eof(const std::string& details) { throw_unexpeced_eof(details.c_str()); }
 				noinline(bool) next_attribute();
