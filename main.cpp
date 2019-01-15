@@ -28,11 +28,8 @@ struct three_parser {
 
 	three begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) {
-		if (mpd::xml::try_read_attribute(reader, "attr1", attr1, name, std::move(value))) ; 
-		else if (mpd::xml::try_read_attribute(reader, "attr2", attr2, name, std::move(value))) ;
-		else reader.throw_unexpected();
-	}
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) 
+	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	three_parser& start_element(mpd::xml::attribute_reader& reader) 
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&&) {
@@ -51,11 +48,8 @@ struct two_parser {
 
 	two begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) {
-		if (mpd::xml::try_read_attribute(reader, "attr1", attr1, name, std::move(value)));
-		else if (mpd::xml::try_read_attribute(reader, "attr2", attr2, name, std::move(value)));
-		else reader.throw_unexpected();
-	}
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
+	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	two_parser& start_element(mpd::xml::attribute_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&& content) {
@@ -81,11 +75,7 @@ struct one_parser {
 	one begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
-	{
-		if (mpd::xml::try_read_attribute(reader, "attr1", attr1, name, std::move(value)));
-		else if (mpd::xml::try_read_attribute(reader, "attr2", attr2, name, std::move(value)));
-		else reader.throw_unexpected();
-	}
+	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	one_parser& start_element(mpd::xml::attribute_reader& reader) 
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&& content) {
