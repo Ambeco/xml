@@ -131,7 +131,7 @@ int main() {
         "       <>!\"']]]]>\n"
         "</one>\n";
 
-	mpd::xml::document_reader parser("test literal", std::begin(buffer), std::end(buffer));
+	mpd::xml::document_reader parser("test literal", std::begin(buffer), std::end(buffer)-1);
 	one data{};
     try {
 		data = parser.read_element("one", one_parser{});

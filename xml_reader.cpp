@@ -237,11 +237,6 @@ namespace mpd {
 					while(buffer_idx<buffer.size()) {
 						if (!is_whitespace(buffer[buffer_idx]))
 							return;
-						else if (buffer[buffer_idx] == '\0') {
-							consume_nonws();
-							if (!at_eof()) throw_malformed_xml("cannot have null byte in xml");
-							return;
-						}
 						consume_maybe_ws();
 					}
 				} while (!at_eof());
@@ -290,10 +285,6 @@ namespace mpd {
 						} else if (buffer[buffer_idx] == '<') {
 							if (peek("<![CDATA[")) append_cdata();
 							else return;
-						} else if (buffer[buffer_idx] == '\0') {
-							consume_nonws();
-							if (!at_eof()) throw_malformed_xml("cannot have null byte in xml");
-							return;
 						} else 
 							node.second.append(1, consume_maybe_ws());
 					}
@@ -339,8 +330,7 @@ namespace mpd {
 						if (peek("]]>")) {
 							consume_nonws(3);
 							return;
-						} else if (buffer[buffer_idx] == '\0') 
-							throw_malformed_xml("cannot have null byte in xml");
+						}
 						node.second.append(1, consume_maybe_ws());
 					}
 				} while (!at_eof());
