@@ -115,22 +115,20 @@ namespace mpd {
 				case parse_state::before_tag_finish: return position.tag_name + " content begin";
 				case parse_state::after_open_tag: return position.tag_name + " details";
 				case parse_state::document_end: return "document end";
-				case parse_state::after_node: return get_node_type_string(node.first, position.tag_name, node.second.substr(0, 25));
+				case parse_state::after_node: return get_node_type_string(node.first, position.tag_name);
 				default:
 					assert(false);
 					return "UNKNOWN STATE[" + std::to_string((int)position.state) +"]";
 				}
 			}
 
-			std::string reader::get_node_type_string(node_type type, const std::string& name, const std::string& content) {
+			std::string reader::get_node_type_string(node_type type, const std::string& name) {
 				switch (type) {
-				case node_type::cdata_node: return "cdata" + content;
-				case node_type::comment_node: return "comment " + content;
+				case node_type::comment_node: return "comment ";
 				case node_type::element_node: return name + " element";
-				case node_type::attribute_node: return name + "attribute ";
-				case node_type::processing_node: return "processing node " + content;
-				case node_type::string_node: return "string " + content;
-				case node_type::whitespace_node: return "whitespace";
+				case node_type::attribute_node: return name + " attribute ";
+				case node_type::processing_node: return name + " processing node";
+				case node_type::string_node: return name + " string";
 				default:
 					assert(false);
 					return "UNKNOWN NODE[" + std::to_string((int)node.first) + "]";
@@ -145,7 +143,7 @@ namespace mpd {
 				throw unexpected_node(get_location_for_exception() + ": ERROR: " + (details != nullptr ? details : "unexpected_node"));
 			}
 			void reader::throw_missing(node_type type, const char* name, const char* details) {
-				std::string msg = get_node_type_string(type, name, "");
+				std::string msg = get_node_type_string(type, name);
 				if (details != nullptr) {
 					msg += ": ";
 					msg += details;
@@ -209,10 +207,7 @@ namespace mpd {
 					|| position.state == parse_state::after_node
 					|| position.state == parse_state::after_open_tag);
 				char c = peek();
-				if (is_whitespace(c)) {
-					read_ws();
-					position.state = parse_state::after_node;
-				} else if (c != '<') {
+				if (c != '<' || peek("<!CDATA[")) {
 					read_string();
 					position.state = parse_state::after_node;
 				} else {
@@ -222,7 +217,6 @@ namespace mpd {
 					else if (c == '/') return read_close_tag();
 					else if (c == '?') read_processing_instruction(); //   <?xml version="1.0"?>
 					else if (peek("!--")) read_comment();
-					else if (peek("![CDATA[")) read_cdata();
 					else if (peek("!ATTLIST ")) read_attribute_list();
 					else if (peek("!DOCTYPE ")) read_doctype();
 					else if (peek("!ELEMENT ")) read_element_type();
@@ -238,23 +232,6 @@ namespace mpd {
 				if (c != c1 && c != c2) throw_malformed_xml(message);
 				return consume_nonws();
 			}
-			void reader::read_ws() {
-				node.first = node_type::whitespace_node;
-				node.second.clear();
-				do {
-					//todo optimize out per-char-append
-					while(buffer_idx<buffer.size()) {
-						if (!is_whitespace(buffer[buffer_idx]))
-							return;
-						else if (buffer[buffer_idx] == '\0') {
-							consume_nonws();
-							if (!at_eof()) throw_malformed_xml("cannot have null byte in xml");
-							return;
-						}
-						node.second.append(1, consume_maybe_ws());
-					}
-				} while (!at_eof());
-			};
 			void reader::skip_ws() {
 				do {
 					while(buffer_idx<buffer.size()) {
@@ -302,7 +279,7 @@ namespace mpd {
 				throw_unexpeced_eof("while parsing attribute " + attribute_set[attribute_count-1]);
 			};
 			void reader::read_string() {
-				assert(buffer[buffer_idx] != '<' && !is_whitespace(buffer[buffer_idx]));
+				assert(buffer[buffer_idx] != '<' || peek("<[CADATA["));
 				node.first = node_type::string_node;
 				node.second.clear();
 				do {
@@ -310,20 +287,15 @@ namespace mpd {
 						if (buffer[buffer_idx] == '&') {
 							consume_nonws();
 							consume_escape(node.second);
-						}  else if (buffer[buffer_idx] == '<')
-							return;
-						else if (buffer[buffer_idx] == '\0') {
+						} else if (buffer[buffer_idx] == '<') {
+							if (peek("<![CDATA[")) append_cdata();
+							else return;
+						} else if (buffer[buffer_idx] == '\0') {
 							consume_nonws();
 							if (!at_eof()) throw_malformed_xml("cannot have null byte in xml");
 							return;
-						} else if (!is_whitespace(buffer[buffer_idx])) 
+						} else 
 							node.second.append(1, consume_maybe_ws());
-						else { //is whitespace. Is it trailing whitespace?
-							std::size_t next_non_ws = peek_next_nonws_idx();
-							if (buffer[next_non_ws]=='<' || is_whitespace(buffer[next_non_ws]))
-								return;
-							read_ws_until(next_non_ws); // it's not. Add it all and keep going
-						}
 					}
 				} while (!at_eof());
 				return;
@@ -359,17 +331,16 @@ namespace mpd {
 				} while (!at_eof());
 				throw_unexpeced_eof(); //TODO pass descriptions like above
 			}
-			void reader::read_cdata() {
-				assert(peek("![CDATA["));
-				consume_nonws(8);
-				node.first = node_type::string_node;
-				node.second.clear();
+			void reader::append_cdata() {
+				assert(peek("<![CDATA["));
+				consume_nonws(9);
 				do {
 					while (buffer_idx < buffer.size()) {
 						if (peek("]]>")) {
 							consume_nonws(3);
 							return;
-						}
+						} else if (buffer[buffer_idx] == '\0') 
+							throw_malformed_xml("cannot have null byte in xml");
 						node.second.append(1, consume_maybe_ws());
 					}
 				} while (!at_eof());
@@ -411,30 +382,6 @@ namespace mpd {
 				} while (!at_eof());
 				throw_unexpeced_eof("unexpected eof in processing instruction " + node.second.substr(0, 20));
 			}
-			void reader::read_ws_until(std::size_t to_idx) {
-				assert(to_idx >= 0 && to_idx < buffer.size());
-				node.first = node_type::whitespace_node;
-				node.second.append(buffer.begin() + buffer_idx, buffer.begin() + to_idx);
-				std::size_t newline_count = 0;
-				std::size_t linefeed_count = 0;
-				std::size_t lastnewline = std::numeric_limits<std::size_t>::max();
-				for (std::size_t i = buffer_idx; i < to_idx; i++) {
-					if (buffer[i] == '\n') {
-						newline_count++;
-						lastnewline = i;
-						linefeed_count = 0;
-					}
-					else if (buffer[i] == '\r')
-						linefeed_count++;
-				}
-				if (lastnewline == std::numeric_limits<std::size_t>::max()) {
-					position.column += (to_idx - buffer_idx - linefeed_count);
-				} else {
-					position.line += newline_count;
-					position.column = (to_idx - lastnewline - linefeed_count);
-				}
-				buffer_idx = to_idx;
-			}
 			__forceinline char reader::consume_nonws() {
 				char c = buffer[buffer_idx];
 				++position.column;
@@ -445,7 +392,7 @@ namespace mpd {
 				position.column += count;
 				buffer_idx += count;
 			}
-			char reader::consume_maybe_ws() {
+			__forceinline char reader::consume_maybe_ws() {
 				char c = buffer[buffer_idx];
 				if (buffer[buffer_idx] == '\n') {
 					position.line++;
@@ -523,8 +470,7 @@ namespace mpd {
 				return false;
 			}
 			void reader::read_buffer(std::size_t keep_after_idx) {
-				assert(keep_after_idx <= buffer.size());
-				assert(keep_after_idx > 0 || 0==buffer.size());
+				assert(keep_after_idx >= 0 && keep_after_idx <= buffer.size());
 				std::size_t keep_cnt = buffer.size() - keep_after_idx;
 				if (keep_cnt > 0)
 					std::move(buffer.begin() + keep_after_idx, buffer.end(), buffer.begin());

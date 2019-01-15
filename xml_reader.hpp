@@ -2,13 +2,14 @@
 #define _CRT_NONSTDC_NO_DEPRECATE
 #include <cassert>
 #include <cctype>
-#include <stdexcept>
-#include <string>
-#include <iterator>
 #include <climits>
 #include <cstring>
-#include <type_traits>
+#include <iterator>
 #include <functional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
 #include <utility>
 #include "type_erased.hpp"
 
@@ -19,26 +20,21 @@
 #endif
 
 namespace mpd {
-	static inline std::string & ltrim_inplace(std::string &s) {
-		s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+	static inline std::string_view ltrim(std::string_view s) {
+		std::string_view::const_iterator last = std::find_if(s.begin(), s.end(), [](int ch) {
 			return !std::isspace(ch);
-		}));
-		return s;
+		});
+		return std::string_view(s.data(), last -s.begin());
 	}
-
-	// trim from end (in place)
-	static inline std::string & rtrim_inplace(std::string &s) {
-		s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
-			return !std::isspace(ch);
-		}).base(), s.end());
-		return s;
+	static inline std::string_view rtrim(std::string_view s) {
+		std::string_view::const_iterator first = std::find_if(s.begin(), s.end(), [](int ch) {
+			return std::isspace(ch);
+		});
+		std::size_t drop = first - s.begin() + 1;
+		return std::string_view(s.data() + drop, s.length() - drop);
 	}
-
-	// trim from both ends (in place)
-	static inline std::string & trim_inplace(std::string &s) {
-		ltrim_inplace(s);
-		rtrim_inplace(s);
-		return s;
+	static inline std::string_view trim(std::string_view s) {
+		return ltrim(rtrim(s));
 	}
 
 	namespace xml {
@@ -173,7 +169,7 @@ namespace mpd {
 			missing_node(std::string&& message) : invalid_content(std::move(message)) {}
 		};
 
-		enum class node_type { attribute_node, processing_node, element_node, string_node, whitespace_node, comment_node, cdata_node };
+		enum class node_type { attribute_node, processing_node, element_node, string_node, comment_node };
 
 		namespace impl { class reader; }
 
@@ -246,11 +242,11 @@ namespace mpd {
 			return_type begin_tag(tag_reader& reader)
 			{ child.reset(); return reader.begin_tag(); }
 			void read_node(element_reader& reader, node_type type, std::string&& content) {
-				if (type == node_type::element_node && content == child_tag_ && !child.has_value()) 
+				if (type == node_type::element_node && (content == child_tag_ || child_tag_==nullptr) && !child.has_value())
 					child.emplace(reader.read_element(child_parser_));
 				else if (type == node_type::processing_node && content!="xml version=\"1.0\"")
 					reader.throw_unexpected("unexpected processing node at root level");
-				else if (type == node_type::string_node && !trim_inplace(content).empty())
+				else if (type == node_type::string_node && !trim(content).empty())
 					reader.throw_unexpected("unexpected root string " + content.substr(0, 20));
 				else if (type == node_type::element_node)
 					reader.throw_unexpected("unexpected root element " + content.substr(0, 20));

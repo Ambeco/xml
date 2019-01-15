@@ -1,37 +1,53 @@
 #pragma once
-#include <optional>
 #include <list>
+#include <optional>
 #include <queue>
 #include "xml_reader.hpp"
 
 namespace mpd {
 	namespace xml {
+		struct untrimmed_string_parser {
+			protected: std::optional<std::string> value;
+			public:
+				std::string begin_tag(tag_reader& reader, const std::string&)
+				{ value.reset(); return reader.read_attributes(*this); }
+				void read_node(element_reader& reader, node_type type, std::string&& content) {
+					if (type == node_type::string_node && !value.has_value())
+						value.emplace(std::move(content));
+					else if (type == node_type::string_node || type == node_type::element_node)
+						reader.throw_unexpected();
+				}
+				std::string&& end_element(attribute_reader& reader) {
+					if (!value.has_value()) reader.throw_missing(node_type::string_node, "value");
+					return std::move(value.value());
+				}
+		};
+
 		template<class T, class derived_parser_t>
 		class simple_string_parser {
 		protected: std::optional<T> value;
 		public:
-			T begin_element(attribute_reader& reader, const std::string& tag_id) 
-			{ value.reset(); return reader.read_attribute(*this); }
+			T begin_tag(tag_reader& reader, const std::string& tag_id)
+			{ value.reset(); return reader.read_attributes(*this); }
 			void read_node(element_reader& reader, node_type type, std::string&& content) {
-				if (type == node_type::string_node && !value.has_value()) {
-					value.set(reinterpret_cast<derived_parser_t*>(this)->stov(reader, std::move(content)));
-				} else if (type == node_type::string_node || type == node_type::element_node)
+				if (type == node_type::string_node && !value.has_value())
+					value.emplace(reinterpret_cast<derived_parser_t*>(this)->stov(reader, trim(content)));
+				else if (type == node_type::string_node || type == node_type::element_node)
 					reader.throw_unexpected();
 			}
-			T end_element(attribute_reader& reader) {
+			T&& end_element(attribute_reader& reader) {
 				if (!value.has_value()) reader.throw_missing(node_type::string_node, "value");
-				return value;
+				return std::move(value.value());
+			}
+		};
+		struct trimmed_string_parser : public simple_string_parser<std::string, trimmed_string_parser> {
+			std::string_view stov(element_reader&, std::string_view content) {
+				return content;
 			}
 		};
 
-		struct string_parser : public simple_string_parser<std::string, string_parser> {
-			std::string&& stov(element_reader&, std::string&& content) {
-				return std::move(content);
-			}
-		};
-
-		struct char_parser : public simple_string_parser<std::string, string_parser> {
-			char stov(element_reader& reader, std::string&& content) {
+		struct char_parser : public simple_string_parser<std::string, char_parser> {
+			char stov(element_reader& reader, std::string_view content) {
 				if (content.length() != 1) reader.throw_invalid_content("expected only a single char");
 				return content[0];
 			}
@@ -39,7 +55,7 @@ namespace mpd {
 
 		template<class T, class R, R F(const char*, char**, int)>
 		struct strtoi_parser : public simple_string_parser<T, strtoi_parser<T,R,F>> {
-			T stov(element_reader& reader, std::string&& content) {
+			T stov(element_reader& reader, std::string_view content) {
 				char* end = 0;
 				R temp = F(content.c_str(), &end, 10);
 				if (end != content.data() + content.length())
@@ -60,7 +76,7 @@ namespace mpd {
 
 		template<class T, T F(const char*, char**)>
 		struct strtof_parser {
-			T stov(element_reader& reader, std::string&& content) {
+			T stov(element_reader& reader, std::string_view content) {
 				char* end = 0;
 				value = static_cast<T>(T(content.c_str(), &end));
 				if (end != content.data() + content.length())
@@ -82,10 +98,10 @@ namespace mpd {
 			simple_container_parser(std::string child_tag) : child_tag_(std::move(child_tag)), parser() {}
 			template<class...Us> explicit simple_container_parser(std::string child_tag, Us&&...vs)
 				: child_tag_(std::move(child_tag)), parser(std::forward<Us>(vs)...) {}
-			element_t begin_element(attribute_reader& reader, const std::string& tag_id) 
+			element_t begin_tag(tag_reader& reader, const std::string& tag_id)
 			{ container.clear(); return reader.read_attributes(*this); }
 			void read_node(element_reader& reader, node_type type, std::string&& content) {
-				if (type == element_node && content == child_tag_)
+				if (type == element_node && (content == child_tag_ || child_tag == nullptr_))
 					reinterpret_cast<element_parser_t*>(this)->add_child(reader, reader.read_element(parser));
 				else if (type == string_node || type == element_node)
 						reader.throw_unexpected();

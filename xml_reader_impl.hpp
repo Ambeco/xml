@@ -1,13 +1,13 @@
 #pragma once
 #define _CRT_NONSTDC_NO_DEPRECATE
 #include <cassert>
-#include <stdexcept>
-#include <string>
-#include <iterator>
 #include <climits>
 #include <cstring>
-#include <type_traits>
 #include <functional>
+#include <iterator>
+#include <stdexcept>
+#include <string>
+#include <type_traits>
 #include <utility>
 #include "type_erased.hpp"
 
@@ -125,14 +125,14 @@ namespace mpd {
 
 				template<class attribute_parser_t>//, typename identity<decltype(attribute_parser_t::read_attribute)>::type = 0>
 				auto read_attribute(attribute_parser_t& parser, special_)
-					//-> decltype(parser.read_attribute(*this, const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second)))
+					-> decltype(parser.read_attribute(*this, std::declval<const std::string&>(), std::move(node.second)))
 				{
 					post_condition condition(this, parse_state::after_attribute, "parser.read_attribute somehow did something invalid"); 
 					return parser.read_attribute(*this, const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second));
 				}
 				template<class attribute_parser_t>
 				void read_attribute(attribute_parser_t&, general_)
-				{ throw_unexpected("unexpected attribute " + attribute.first); }
+				{ throw_unexpected("unexpected attribute " + attribute_set[attribute_count-1]); }
 
 				template<class element_parser_t>//, typename identity<decltype(element_parser_t::start_element)>::type = 0>
 				auto start_element(element_parser_t&& parser, special_) -> decltype(std::move(parser).start_element(*this))
@@ -154,7 +154,7 @@ namespace mpd {
 					, attribute_count(0)
 				{ }
 				std::string get_parse_state_name();
-				std::string get_node_type_string(node_type type, const std::string& name, const std::string& content);
+				std::string get_node_type_string(node_type type, const std::string& name);
 				void throw_invalid_read_call(const char* details = nullptr);
 				void throw_invalid_read_call(const std::string& details) { throw_invalid_read_call(details.c_str()); }
 				void throw_invalid_parser(const char* details = nullptr);
@@ -168,7 +168,6 @@ namespace mpd {
 				noinline(bool) next_attribute();
 				noinline(bool) next_node();
 				char affirm_next_char(char c1, char c2, const char* message);
-				void read_ws();
 				void skip_ws();
 				void read_name(std::string&);
 				void read_attr(char quote);
@@ -176,14 +175,13 @@ namespace mpd {
 				bool read_tag_name();
 				bool read_close_tag();
 				void read_comment();
-				void read_cdata();
+				void append_cdata();
 				void read_conditional();
 				void read_attribute_list();
 				void read_doctype();
 				void read_element_type();
 				void read_notation();
 				void read_processing_instruction();
-				void read_ws_until(std::size_t to_idx);
 				char consume_nonws();
 				void consume_nonws(int count);
 				char consume_maybe_ws();
