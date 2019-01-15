@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
-#include <utility>
 #include <optional>
+#include <utility>
 
 namespace mpd {
 	/**
