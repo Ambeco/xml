@@ -1,5 +1,6 @@
 
 #include "std_xml_parsers.hpp"
+#include "xml_attributes.hpp"
 #include <iostream>
 #include <new>
 
@@ -27,22 +28,13 @@ struct three_parser {
 
 	three begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
-	{
-		if (name == "attr1") {
-			if (attr1.has_value()) reader.throw_unexpected();
-			attr1.emplace(std::atoi(value.data())); // TODO add easy helper method to reader
-		} else if (name == "attr2") {
-			if (attr2.has_value()) reader.throw_unexpected();
-			attr2.emplace(std::move(value));
-		} else
-			reader.throw_unexpected();
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) {
+		if (mpd::xml::try_read_attribute(reader, "attr1", attr1, name, std::move(value))) ; 
+		else if (mpd::xml::try_read_attribute(reader, "attr2", attr2, name, std::move(value))) ;
+		else reader.throw_unexpected();
 	}
-	three_parser& start_element(mpd::xml::attribute_reader& reader) {
-		if (!attr1.has_value()) reader.throw_missing(mpd::xml::node_type::attribute_node, "attr1");
-		if (!attr2.has_value()) reader.throw_missing(mpd::xml::node_type::attribute_node, "attr2");
-		return *this;
-	}
+	three_parser& start_element(mpd::xml::attribute_reader& reader) 
+	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&&) {
 		if (type == mpd::xml::node_type::element_node || type == mpd::xml::node_type::string_node)
 			reader.throw_unexpected();
@@ -59,24 +51,13 @@ struct two_parser {
 
 	two begin_element(mpd::xml::tag_reader& reader, const std::string&) 
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
-	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
-	{
-		if (name == "attr1") {
-			if (attr1.has_value()) reader.throw_unexpected();
-			attr1.emplace(std::atoi(value.data())); // TODO add easy helper method to reader
-		}
-		else if (name == "attr2") {
-			if (attr2.has_value()) reader.throw_unexpected();
-			attr2.emplace(std::move(value));
-		}
-		else
-			reader.throw_unexpected();
+	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) {
+		if (mpd::xml::try_read_attribute(reader, "attr1", attr1, name, std::move(value)));
+		else if (mpd::xml::try_read_attribute(reader, "attr2", attr2, name, std::move(value)));
+		else reader.throw_unexpected();
 	}
-	two_parser& start_element(mpd::xml::attribute_reader& reader) {
-		if (!attr1.has_value()) reader.throw_missing(mpd::xml::node_type::attribute_node, "attr1");
-		if (!attr2.has_value()) reader.throw_missing(mpd::xml::node_type::attribute_node, "attr2");
-		return *this;
-	}
+	two_parser& start_element(mpd::xml::attribute_reader& reader)
+	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&& content) {
 		if (type == mpd::xml::node_type::element_node && content == "three")
 			nodes.emplace_back(reader.read_element(three_parser{}));
@@ -101,22 +82,12 @@ struct one_parser {
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{
-		if (name == "attr1") {
-			if (attr1.has_value()) reader.throw_unexpected();
-			attr1.emplace(std::atoi(value.data())); // TODO add easy helper method to reader
-		}
-		else if (name == "attr2") {
-			if (attr2.has_value()) reader.throw_unexpected();
-			attr2.emplace(std::move(value));
-		}
-		else
-			reader.throw_unexpected();
+		if (mpd::xml::try_read_attribute(reader, "attr1", attr1, name, std::move(value)));
+		else if (mpd::xml::try_read_attribute(reader, "attr2", attr2, name, std::move(value)));
+		else reader.throw_unexpected();
 	}
-	one_parser& start_element(mpd::xml::attribute_reader& reader) {
-		if (!attr1.has_value()) reader.throw_missing(mpd::xml::node_type::attribute_node, "attr1");
-		if (!attr2.has_value()) reader.throw_missing(mpd::xml::node_type::attribute_node, "attr2");
-		return *this;
-	}
+	one_parser& start_element(mpd::xml::attribute_reader& reader) 
+	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&& content) {
 		if (type == mpd::xml::node_type::element_node && content == "two") {
 			try {

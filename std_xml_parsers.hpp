@@ -1,8 +1,9 @@
 #pragma once
+#include "xml_reader.hpp"
+#include <limits>
 #include <list>
 #include <optional>
 #include <queue>
-#include "xml_reader.hpp"
 
 namespace mpd {
 	namespace xml {
@@ -59,16 +60,19 @@ namespace mpd {
 				char* end = 0;
 				R temp = F(content.c_str(), &end, 10);
 				if (end != content.data() + content.length())
-					reader.throw_invalid_content((std::string("could not parse entire input for ") + typeid(T).name).c_str());
-				if (temp > std::limits<T>::max() || temp < std::limits<T>::min())
-					reader.throw_invalid_content((std::string("out of range for ") + typeid(T).name).c_str());
+					reader.throw_invalid_content("could not parse entire input for "s + typeid(T).name);
+				if (temp > std::numeric_limits<T>::max() || temp < std::numeric_limits<T>::min())
+					reader.throw_invalid_content("out of range for "s + typeid(T).name);
 				return static_cast<T>(temp);
 			}
 		};
+		typedef strtoi_parser<char, long, std::strtol> byte_parser;
+		typedef strtoi_parser<signed char, long, std::strtol> sbyte_parser;
 		typedef strtoi_parser<short, long, std::strtol> short_parser;
 		typedef strtoi_parser<int, long, std::strtol> int_parser;
 		typedef strtoi_parser<long, long, std::strtol> long_parser;
 		typedef strtoi_parser<long long, long long, std::strtoll> long_long_parser;
+		typedef strtoi_parser<unsigned char, long, std::strtol> ubyte_parser;
 		typedef strtoi_parser<unsigned short, unsigned long, std::strtoul> unsigned_short_parser;
 		typedef strtoi_parser<unsigned int, unsigned long, std::strtoul> unsigned_int_parser;
 		typedef strtoi_parser<unsigned long, unsigned long, std::strtoul> unsigned_long_parser;
@@ -78,10 +82,10 @@ namespace mpd {
 		struct strtof_parser {
 			T stov(element_reader& reader, std::string_view content) {
 				char* end = 0;
-				value = static_cast<T>(T(content.c_str(), &end));
+				value = static_cast<T>(F(content.c_str(), &end));
 				if (end != content.data() + content.length())
-					reader.throw_invalid_content((std::string("expected number for ") + typeid(T).name).c_str());
-				set = true;
+					reader.throw_invalid_content("expected number for "s + typeid(T).name);
+				return value;
 			}
 		};
 		typedef strtof_parser<float, std::strtof> float_parser;

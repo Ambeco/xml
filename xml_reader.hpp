@@ -1,9 +1,11 @@
 #pragma once
 #define _CRT_NONSTDC_NO_DEPRECATE
+#include "type_erased.hpp"
 #include <cassert>
 #include <cctype>
 #include <climits>
 #include <cstring>
+#include <algorithm>
 #include <iterator>
 #include <functional>
 #include <stdexcept>
@@ -11,7 +13,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include "type_erased.hpp"
 
 #ifdef _MSC_VER 
 #define noinline(RETURN) __declspec(noinline) RETURN
@@ -38,6 +39,7 @@ namespace mpd {
 	}
 
 	namespace xml {
+		using namespace std::literals::string_literals;
 		/**
 		Lingo:
 		Tag - The name and attributes within a <> pair. Open tags start an Element, and a close

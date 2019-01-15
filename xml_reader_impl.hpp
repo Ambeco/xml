@@ -1,5 +1,6 @@
 #pragma once
 #define _CRT_NONSTDC_NO_DEPRECATE
+#include "type_erased.hpp"
 #include <cassert>
 #include <climits>
 #include <cstring>
@@ -9,7 +10,6 @@
 #include <string>
 #include <type_traits>
 #include <utility>
-#include "type_erased.hpp"
 
 #ifdef _MSC_VER 
 #define noinline(RETURN) __declspec(noinline) RETURN

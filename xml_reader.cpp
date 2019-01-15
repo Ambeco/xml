@@ -1,6 +1,6 @@
+#include "xml_reader.hpp"
 #include <algorithm>
 #include <limits>
-#include "xml_reader.hpp"
 
 namespace mpd {
 	namespace xml {
@@ -222,7 +222,7 @@ namespace mpd {
 					else if (peek("!ELEMENT ")) read_element_type();
 					else if (peek("!NOTATION ")) read_notation();
 					else if (peek("!% ")) read_conditional();
-					else throw_malformed_xml(std::string("invalid tag start: ") + c);
+					else throw_malformed_xml("invalid tag start: "s + c);
 					position.state = parse_state::after_node;
 				}
 				return true;
@@ -249,7 +249,7 @@ namespace mpd {
 			void reader::read_name(std::string& out) {
 				out.clear();
 				char first = peek();
-				if (!is_name_start_char(first)) throw_malformed_xml(first + std::string(" is not a valid char for starting a name"));
+				if (!is_name_start_char(first)) throw_malformed_xml(first + " is not a valid char for starting a name"s);
 				out.append(1, consume_nonws());
 				do {
 					while(buffer_idx<buffer.size()) {

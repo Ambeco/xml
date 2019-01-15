@@ -35,5 +35,8 @@
     <ClInclude Include="xml_reader_impl.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="xml_attributes.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
