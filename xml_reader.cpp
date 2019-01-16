@@ -5,8 +5,11 @@
 namespace mpd {
 	namespace xml {
 		namespace impl {
-			static const std::size_t MAX_LOOKAHEAD = 100;
+#ifdef _DEBUG
+			static const std::size_t BUFFER_SIZE = 15;
+#else 
 			static const std::size_t BUFFER_SIZE = 1042;
+#endif
 
 			const int html_escape_code_hash_size = 7;
 			std::pair<int, int> html_escape_codes[html_escape_code_hash_size] = {
@@ -396,7 +399,8 @@ namespace mpd {
 			}
 			void reader::consume_escape(std::string& out) {
 				assert(buffer[buffer_idx] == '&');
-				if (buffer_idx + 12 > buffer.size()) read_buffer(buffer_idx - 1);
+				consume_nonws();
+				if (buffer_idx + 11 > buffer.size()) read_buffer();
 				const char* deescape_ptr = buffer.data() + buffer_idx;
 				std::size_t in_bytes = 0;
 				int code_point = deescape(deescape_ptr, in_bytes);
@@ -406,29 +410,14 @@ namespace mpd {
 					code_point = deescape(deescape_ptr2, in_bytes2);
 					in_bytes += in_bytes;
 				}
-				if (code_point == -1) {
-					throw_malformed_xml(std::string(deescape_ptr, in_bytes) + " is not a recognized escape sequence");
-				}
+				if (code_point == -1) throw_malformed_xml(std::string(deescape_ptr, in_bytes) + " is not a recognized escape sequence");
 				append_utf8(code_point, out);
 				position.column += in_bytes;
 				buffer_idx += in_bytes;
 			}
-			std::size_t reader::peek_next_nonws_idx() {
-				assert(is_whitespace(buffer[buffer_idx]));
-				for (std::size_t i = buffer_idx + 1; i < buffer.size(); i++) {
-					if (!is_whitespace(buffer[i])) return i;
-				}
-				// if didn't read at least MAX_LOOKAHEAD, then reload the buffer, and repeat
-				if (buffer.size() - buffer_idx >= MAX_LOOKAHEAD) return buffer_idx;
-				read_buffer(buffer_idx);
-				for (std::size_t i = buffer_idx + 1; i < buffer.size(); i++) {
-					if (!is_whitespace(buffer[i])) return i;
-				}
-				return buffer_idx;
-			}
 			__forceinline char reader::peek() {
 				if (buffer_idx >= buffer.size()) {
-					read_buffer(buffer_idx);
+					read_buffer();
 					if (buffer_idx >= buffer.size())
 						throw_unexpeced_eof();
 				}
@@ -437,16 +426,16 @@ namespace mpd {
 			__forceinline char reader::peek(int offset) {
 				assert(buffer_idx + offset < BUFFER_SIZE);
 				if (buffer_idx+ offset >= buffer.size()) {
-					read_buffer(buffer_idx);
+					read_buffer();
 					if (buffer_idx + offset >= buffer.size())
 						throw_unexpeced_eof();
 				}
 				return buffer[buffer_idx+ offset];
 			}
 			__forceinline bool reader::peek(const char* str, int len) {
-				assert(buffer_idx + len < BUFFER_SIZE);
+				assert(len < BUFFER_SIZE);
 				if (buffer_idx + len >= buffer.size()) {
-					read_buffer(buffer_idx);
+					read_buffer();
 					if (buffer_idx + len >= buffer.size())
 						return false;
 				}
@@ -454,20 +443,18 @@ namespace mpd {
 			}
 			bool reader::at_eof() {
 				if (buffer_idx >= buffer.size()) {
-					read_buffer(buffer_idx);
+					read_buffer();
 					return buffer.empty();
 				}
 				return false;
 			}
-			void reader::read_buffer(std::size_t keep_after_idx) {
-				assert(keep_after_idx >= 0 && keep_after_idx <= buffer.size());
-				std::size_t keep_cnt = buffer.size() - keep_after_idx;
-				if (keep_cnt > 0)
-					std::move(buffer.begin() + keep_after_idx, buffer.end(), buffer.begin());
-				buffer.resize(BUFFER_SIZE);
+			void reader::read_buffer() {
+				std::size_t keep_cnt = buffer.size() - buffer_idx;
+				if (keep_cnt > 0) std::move(buffer.begin() + buffer_idx, buffer.end(), buffer.begin());
+				if (buffer.size() != BUFFER_SIZE) buffer.resize(BUFFER_SIZE);
 				std::size_t desired_read_cnt = BUFFER_SIZE - 1 - keep_cnt;
-				std::size_t add_cnt = position.read_buf->read(buffer.data() + keep_after_idx, desired_read_cnt);
-				buffer.resize(keep_cnt + add_cnt);
+				std::size_t add_cnt = position.read_buf->read(buffer.data() + keep_cnt, desired_read_cnt);
+				if (add_cnt != BUFFER_SIZE) buffer.resize(keep_cnt + add_cnt);
 				buffer_idx = 0;
 			}
 		}

@@ -25,13 +25,13 @@ namespace mpd {
 		std::string_view::const_iterator last = std::find_if(s.begin(), s.end(), [](int ch) {
 			return !std::isspace(ch);
 		});
-		return std::string_view(s.data(), last -s.begin());
+		return std::string_view(s.data(), last - s.begin());
 	}
 	static inline std::string_view rtrim(std::string_view s) {
-		std::string_view::const_iterator first = std::find_if(s.begin(), s.end(), [](int ch) {
+		std::string_view::const_reverse_iterator first = std::find_if(s.rbegin(), s.rend(), [](int ch) {
 			return std::isspace(ch);
 		});
-		std::size_t drop = first - s.begin() + 1;
+		std::size_t drop = first.base() - s.begin();
 		return std::string_view(s.data() + drop, s.length() - drop);
 	}
 	static inline std::string_view trim(std::string_view s) {
@@ -78,50 +78,55 @@ namespace mpd {
 			// Optional. Called when the parser is parsing a new tag. May be used to defer parsing
 			// to a specific parser based on the tag.
 			// If the parser is also a element_parser_t, this ends up being the same return type.
-			element_type begin_tag(tag_reader& reader, const std::string& tag_id)
+			element_type begin_element(tag_reader& reader, const std::string& tag_id)
 			{ return reader.read_attributes(*this); }
 		}
 		// For processing a Tag's Attributes. All members optional if also an element_parser_t.
 		interface attribute_parser_t {
 			// Optional. Called or each tag. If this is not provided, but there is a parameter,
-			// the parser will throw an unexpected_node. Overrides are encouraged to
+			// the parser will throw an unexpected_node_exception. Overrides are encouraged to
 			// move from the name and value parameters rather than copying.
 			void read_attribute(attribute_reader& reader, const std::string& name, std::string&& value)
 			{ reader.throw_unexpected(); }
 			// Optional IFF the Parser also fullfills element_parser_t. Called when there are no more
 			// attributes. It should return the parser to use for parsing child Nodes.
-			virtual element_parser_t begin_content(attribute_reader& reader) {
+			virtual element_parser_t begin_content(base_reader& reader) {
 				return *this;
 			}
 		}
 		// For processing the child Nodes of an Element.
 		interface element_parser_t {
-			// Required. Called when the parser is parsing a new child element. Caller should check
-			// the type and tag_name. If the type is an element_node, the content parameter
-			// is the tag_name, and you must either call reader.readChild(...) and pass a parser
+			// Optional. Called when the parser is parsing a new child element. Caller should check
+			// the type and tag_name. You must either call reader.readChild(...) and pass a parser
 			// for the child, call one of the reader.throw methods, or throw an exception yourself.
-			// If the type is any other value, there are no special requirements. Overrides are
-			// encouraged to move from the name and value parameters rather than copying.
-			virtual void read_node(element_reader& reader, node_type type, std::string&& content) {
-				if (type == node_type::element_node && content == "thing")
-					addChildToElement(reader.read_element(myChildType{});
-				else if (type == node_type::string_node)
-					reader.throw_unexpected();
+			// If this is not provided, but there is a child element, the parser will throw an
+			// unexpected_node_exception. 
+			virtual void read_child_element(element_reader& reader, const std::string& child_tag) {
+				if (child_tag == "thing") YOURCODEHERE(reader.read_element(ChildParserType{});
+				else reader.throw_unexpected();
+			}
+			// Optional. Called when the parser is parsing a new non-element child node. Caller should
+			// check the type and tag_name. There are no special requirements. Overrides are
+			// encouraged to move from the content parameter rather than copying. If this is not 
+			// provided, but there is a non-whitespace string, the parser will throw an 
+			// unexpected_node_exception. 
+			virtual void read_child_node(base_reader& reader, node_type type, std::string&& content) {
+				if (type == node_type::string_node) YOURCODEHERE(mpd::xml::trim(content));
 			}
 			// Required. This is called when the close Tag is reached. This returns the parsed
 			// information to the parent Element Parser. Presumably this should return the parsed
 			// type, but can return a builder or similar, as long as the parent Element parser is
 			// expecting to receive that type.
 			// If the parser is also a attribute_tag_t, this ends up being the same return type.
-			virtual element_type end_element(attribute_reader& reader) {
+			virtual element_type end_element(base_reader& reader) {
 				return element;
 			}
 		}
 
-		// There are many sample Parsers at the bottom of this file.
+		// There are many sample Parsers in std_xml_parsers.hpp
 		**/
 
-		//Exception for if you call processor.read_node from from a finalizer or readXml_attribute
+		//Exception for if you call processor.read_child_node from from a finalizer or readXml_attribute
 		struct invalid_read_call_error : public std::logic_error {
 			invalid_read_call_error(const char* message) : std::logic_error(message) {}
 			invalid_read_call_error(const std::string& message) : std::logic_error(message) {}
@@ -233,9 +238,9 @@ namespace mpd {
 
 		struct IgnoredXmlParser {
 			void read_attribute(attribute_reader&, const std::string&, std::string) {}
-			void read_node(element_reader& reader, node_type type, std::string&& ) 
-			{if (type == node_type::element_node) reader.read_element(*this); }
-			std::nullptr_t end_element(element_reader&) { return nullptr; }
+			void read_child_element(element_reader& reader, const std::string& ) {reader.read_element(*this); }
+			void read_child_node(base_reader&, node_type, std::string&&) { }
+			std::nullptr_t end_element(base_reader&) { return nullptr; }
 		};
 
 		template<class element_parser_t>
@@ -243,17 +248,12 @@ namespace mpd {
 			typedef decltype(std::declval<element_reader>().read_element(std::declval<element_parser_t>())) return_type;
 			return_type begin_tag(tag_reader& reader)
 			{ child.reset(); return reader.begin_tag(); }
-			void read_node(element_reader& reader, node_type type, std::string&& content) {
-				if (type == node_type::element_node && (content == child_tag_ || child_tag_==nullptr) && !child.has_value())
+			void read_child_element(element_reader& reader, const std::string& tag) {
+				if ((tag == child_tag_ || child_tag_==nullptr) && !child.has_value())
 					child.emplace(reader.read_element(child_parser_));
-				else if (type == node_type::processing_node && content!="xml version=\"1.0\"")
-					reader.throw_unexpected("unexpected processing node at root level");
-				else if (type == node_type::string_node && !trim(content).empty())
-					reader.throw_unexpected("unexpected root string " + content.substr(0, 20));
-				else if (type == node_type::element_node)
-					reader.throw_unexpected("unexpected root element " + content.substr(0, 20));
+				else reader.throw_unexpected("unexpected root element " + tag);
 			}
-			return_type end_element(element_reader&) { return std::move(child).value(); }
+			return_type end_element(base_reader&) { return std::move(child).value(); }
 			document_root_parser(const char* child_tag, element_parser_t child_parser)
 				: child_tag_(child_tag), child_parser_(child_parser) {}
 			document_root_parser(const document_root_parser&) = delete;

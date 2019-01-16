@@ -1,5 +1,5 @@
 
-#include "std_xml_parsers.hpp"
+#include "xml_std_parsers.hpp"
 #include "xml_attributes.hpp"
 #include <iostream>
 #include <new>
@@ -30,13 +30,9 @@ struct three_parser {
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) 
 	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
-	three_parser& start_element(mpd::xml::attribute_reader& reader) 
+	three_parser& begin_content(mpd::xml::attribute_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
-	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&&) {
-		if (type == mpd::xml::node_type::element_node || type == mpd::xml::node_type::string_node)
-			reader.throw_unexpected();
-	}
-	three end_element(mpd::xml::attribute_reader&) {
+	three end_element(mpd::xml::base_reader&) {
 		return three{ *std::move(attr1), *std::move(attr2) };
 	}
 };
@@ -50,22 +46,21 @@ struct two_parser {
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
-	two_parser& start_element(mpd::xml::attribute_reader& reader)
+	two_parser& begin_content(mpd::xml::attribute_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
-	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&& content) {
-		if (type == mpd::xml::node_type::element_node && content == "three")
-			nodes.emplace_back(reader.read_element(three_parser{}));
-		else if (type == mpd::xml::node_type::string_node) {
+	void read_child_element(mpd::xml::element_reader& reader, const std::string& content) {
+		if (content == "three") nodes.emplace_back(reader.read_element(three_parser{}));
+		else reader.throw_unexpected();
+	}
+	void read_child_node(mpd::xml::base_reader& reader, mpd::xml::node_type type, std::string&& content) {
+		if (type == mpd::xml::node_type::string_node) {
 			if (content.find("_") != -1) reader.throw_invalid_content("two-class strings can't contain _");
 			texts.push_back(content);
-		} else if (type == mpd::xml::node_type::comment_node)
-			std::cout << "two-comment: " << content << '\n';
-		else if (type == mpd::xml::node_type::element_node)
-			reader.throw_unexpected();
+		} else if (type == mpd::xml::node_type::comment_node) std::cout << "two-comment: " << content << '\n';
+		else if (type == mpd::xml::node_type::processing_node) std::cout << "two-PN: " << content << '\n';
 	}
-	two end_element(mpd::xml::attribute_reader&) {
-		return two{ *std::move(attr1), *std::move(attr2), std::move(nodes), std::move(texts) };
-	}
+	two end_element(mpd::xml::attribute_reader&) 
+	{ return two{ *std::move(attr1), *std::move(attr2), std::move(nodes), std::move(texts) }; }
 };
 struct one_parser {
 	std::optional<int> attr1;
@@ -76,23 +71,18 @@ struct one_parser {
 	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
-	one_parser& start_element(mpd::xml::attribute_reader& reader) 
+	one_parser& begin_content(mpd::xml::attribute_reader& reader) 
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
-	void read_node(mpd::xml::element_reader& reader, mpd::xml::node_type type, std::string&& content) {
-		if (type == mpd::xml::node_type::element_node && content == "two") {
-			try {
-				nodes.emplace_back(reader.read_element(two_parser{}));
-			} catch (std::runtime_error& e) {
-				std::cerr << "SUCCESSFULLY HANDLED ERROR: " << e.what() << '\n';
-			}
-		} else if (type == mpd::xml::node_type::string_node)
-			std::cout << "one-str: " << content << '\n';
-		else if (type == mpd::xml::node_type::element_node)
-			reader.throw_unexpected();
+	void read_child_element(mpd::xml::element_reader& reader, const std::string& content) {
+		if (content == "two") {
+			try { nodes.emplace_back(reader.read_element(two_parser{})); }
+			catch (std::runtime_error& e) { std::cerr << "SUCCESSFULLY HANDLED ERROR: " << e.what() << '\n'; }
+		} else reader.throw_unexpected();
 	}
-	one end_element(mpd::xml::attribute_reader&) {
-		return one{ *std::move(attr1), *std::move(attr2), std::move(nodes) };
-	}
+	void read_child_node(mpd::xml::element_reader&, mpd::xml::node_type type, std::string&& content) 
+	{ if (type == mpd::xml::node_type::string_node) std::cout << "one-str: " << content << '\n'; }
+	one end_element(mpd::xml::attribute_reader&) 
+	{ return one{ *std::move(attr1), *std::move(attr2), std::move(nodes) }; }
 };
 
 int main() {

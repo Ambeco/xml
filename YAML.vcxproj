@@ -84,7 +84,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="type_erased.hpp" />
-    <ClInclude Include="std_xml_parsers.hpp" />
+    <ClInclude Include="xml_std_parsers.hpp" />
     <ClInclude Include="xml_attributes.hpp" />
     <ClInclude Include="xml_reader.hpp" />
     <ClInclude Include="xml_reader_impl.hpp" />

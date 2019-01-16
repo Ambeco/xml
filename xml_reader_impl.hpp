@@ -77,10 +77,11 @@ namespace mpd {
 				};
 			public:
 				template<class tag_parser_t>//, typename identity<decltype(attribute_parser_t::begin_element)>::type = 0>
-				auto read_element(tag_parser_t& parser, special_) -> decltype(parser.begin_element(*this, position.tag_name))
+				auto read_element(tag_parser_t& parser, special_) 
+					-> decltype(parser.begin_element(static_cast<tag_reader&>(*this), position.tag_name))
 				{
 					post_condition condition(this, parse_state::after_node, "parser.begin_element must call reader.read_attributes");
-					return parser.begin_element(*this, position.tag_name); 
+					return parser.begin_element(static_cast<tag_reader&>(*this), position.tag_name);
 				}
 				template<class attribute_parser_t>
 				auto read_element(attribute_parser_t&& parser, general_)
@@ -92,7 +93,7 @@ namespace mpd {
 						attribute_count = 0;
 						while (next_attribute())
 							read_attribute(parser, special_{});
-						return read_contents(start_element(std::forward<attribute_parser_t>(parser), special_{}));
+						return read_contents(begin_content(std::forward<attribute_parser_t>(parser), special_{}));
 					}
 					catch (const std::exception&) {
 						position = std::move(saved_pos);
@@ -110,10 +111,10 @@ namespace mpd {
 					parse_pos saved_pos(position);
 					try {
 						while (next_node()) {
-							post_condition condition(this, parse_state::after_node, "parser.read_node must call reader.read_element when given a node_type::element_node");
-							parser.read_node(*this, node.first, std::move(node.second));
+							if (node.first == node_type::element_node) read_child_element(parser, special_{});
+							else read_child_node(parser, special_{});
 						}
-						return std::forward<element_parser_t>(parser).end_element(*this);
+						return std::forward<element_parser_t>(parser).end_element(static_cast<attribute_reader&>(*this));
 					}
 					catch (const std::exception&) {
 						position = std::move(saved_pos);
@@ -123,22 +124,46 @@ namespace mpd {
 					}
 				}
 
-				template<class attribute_parser_t>//, typename identity<decltype(attribute_parser_t::read_attribute)>::type = 0>
+				template<class attribute_parser_t>
 				auto read_attribute(attribute_parser_t& parser, special_)
-					-> decltype(parser.read_attribute(*this, std::declval<const std::string&>(), std::move(node.second)))
+					-> decltype(parser.read_attribute(std::declval<attribute_reader&>(), std::declval<const std::string&>(), std::move(node.second)))
 				{
 					post_condition condition(this, parse_state::after_attribute, "parser.read_attribute somehow did something invalid"); 
-					return parser.read_attribute(*this, const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second));
+					return parser.read_attribute(static_cast<attribute_reader&>(*this), const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second));
 				}
 				template<class attribute_parser_t>
 				void read_attribute(attribute_parser_t&, general_)
 				{ throw_unexpected("unexpected attribute " + attribute_set[attribute_count-1]); }
 
-				template<class element_parser_t>//, typename identity<decltype(element_parser_t::start_element)>::type = 0>
-				auto start_element(element_parser_t&& parser, special_) -> decltype(std::move(parser).start_element(*this))
-				{ return std::move(parser).start_element(*this); }
 				template<class element_parser_t>
-				element_parser_t&& start_element(element_parser_t&& parser, general_)
+				auto read_child_element(element_parser_t& parser, special_)
+					-> decltype(parser.read_child_element(std::declval<element_reader&>(), std::declval<const std::string&>()))
+				{
+					post_condition condition(this, parse_state::after_node, "parser.read_child_element should have called reader.read_element(ChildParserType{})");
+					return parser.read_child_element(static_cast<element_reader&>(*this), position.tag_name);
+				}
+				template<class element_parser_t>
+				void read_child_element(element_parser_t&, general_)
+				{ throw_unexpected("unexpected child element " + position.tag_name); }
+
+				template<class element_parser_t>
+				auto read_child_node(element_parser_t& parser, special_)
+					-> decltype(parser.read_child_node(std::declval<base_reader&>(), std::declval<node_type>(), std::declval<std::string&&>()))
+				{
+					post_condition condition(this, position.state, "parser.read_child_node somehow did something invalid");
+					return parser.read_child_node(static_cast<base_reader&>(static_cast<attribute_reader&>(*this)), node.first, std::move(node.second));
+				}
+				template<class element_parser_t>
+				void read_child_node(element_parser_t&, general_) {
+					if (node.first == node_type::string_node && !trim(node.second).empty()) throw_unexpected("unexpected child string " + node.second.substr(0, 20));
+					if (node.first == node_type::processing_node) throw_unexpected("unexpected processing_node " + node.second.substr(0, 20));
+				}
+
+				template<class element_parser_t>//, typename identity<decltype(element_parser_t::begin_content)>::type = 0>
+				auto begin_content(element_parser_t&& parser, special_) -> decltype(std::move(parser).begin_content(std::declval<base_reader&>()))
+				{ return std::move(parser).begin_content(static_cast<base_reader&>(static_cast<attribute_reader&>(*this))); }
+				template<class element_parser_t>
+				element_parser_t&& begin_content(element_parser_t&& parser, general_)
 				{ return std::forward<element_parser_t>(parser); }
 
 				//TODO: Handle attribute namespaces.
@@ -186,13 +211,12 @@ namespace mpd {
 				void consume_nonws(int count);
 				char consume_maybe_ws();
 				void consume_escape(std::string& out);
-				std::size_t peek_next_nonws_idx();
 				char peek();
 				char peek(int idx);
 				template<int len> bool peek(const char(&str)[len]) { return peek(str, len-1); }
 				bool peek(const char* str, int len);
 				bool at_eof();
-				void read_buffer(std::size_t keep_after_idx);
+				void read_buffer();
 			};
 
 			template<class forward_it>
@@ -204,13 +228,9 @@ namespace mpd {
 					: begin_(begin), end_(end)
 				{}
 				virtual read_buf_impl* copy_construct_at(char* buffer, std::size_t buffer_size)const& //noexcept(noexcept(read_buf_impl{ *this }))
-				{
-					assert(buffer_size > sizeof(read_buf_impl)); return new(buffer)read_buf_impl(*this);
-				}
+				{ assert(buffer_size > sizeof(read_buf_impl)); return new(buffer)read_buf_impl(*this); }
 				virtual read_buf_impl* move_construct_at(char* buffer, std::size_t buffer_size) & //noexcept(noexcept(read_buf_impl{ std::move(*this) }))
-				{
-					assert(buffer_size > sizeof(read_buf_impl)); return new(buffer)read_buf_impl(std::move(*this));
-				}
+				{ assert(buffer_size > sizeof(read_buf_impl)); return new(buffer)read_buf_impl(std::move(*this)); }
 				virtual ~read_buf_impl() {};
 				virtual int read(char* buffer, int count) {
 					int c = 0;
