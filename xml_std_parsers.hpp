@@ -11,7 +11,7 @@ namespace mpd {
 			protected: std::optional<std::string> value;
 			public:
 				std::string begin_tag(tag_reader& reader, const std::string&)
-				{ value.reset(); return reader.read_attributes(*this); }
+				{ value.reset(); return reader.read_element(*this); }
 				void read_child_node(base_reader& reader, node_type type, std::string&& content) {
 					if (type == node_type::string_node && !value.has_value())
 						value.emplace(std::move(content));
@@ -28,7 +28,7 @@ namespace mpd {
 		protected: std::optional<T> value;
 		public:
 			T begin_tag(tag_reader& reader, const std::string& tag_id)
-			{ value.reset(); return reader.read_attributes(*this); }
+			{ value.reset(); return reader.read_element(*this); }
 			void read_child_node(base_reader& reader, node_type type, std::string&& content) {
 				if (type == node_type::string_node && !value.has_value())
 					value.emplace(reinterpret_cast<derived_parser_t*>(this)->stov(reader, trim(content)));
@@ -101,7 +101,7 @@ namespace mpd {
 			template<class...Us> explicit simple_container_parser(std::string child_tag, Us&&...vs)
 				: child_tag_(std::move(child_tag)), parser(std::forward<Us>(vs)...) {}
 			element_t begin_tag(tag_reader& reader, const std::string& tag_id)
-			{ container.clear(); return reader.read_attributes(*this); }
+			{ container.clear(); return reader.read_element(*this); }
 			void read_child_element(element_reader& reader, const std::string& tag) {
 				if (tag == child_tag_ || child_tag == nullptr_)
 					reinterpret_cast<derived_parser_t*>(this)->add_child(reader, reader.read_element(parser));

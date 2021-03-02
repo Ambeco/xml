@@ -80,14 +80,14 @@ namespace mpd {
 				auto read_element(child_parser_t& parser, special_)
 					-> decltype(parser.begin_element(static_cast<tag_reader&>(*this), position.tag_name))
 				{
-					post_condition condition(this, parse_state::after_node, "parser.begin_element must call reader.read_attributes");
+					post_condition condition(this, parse_state::after_node, "parser.begin_element must call reader.read_element");
 					return parser.begin_element(static_cast<tag_reader&>(*this), position.tag_name);
 				}
 				template<class tag_parser_t>
 				auto read_element(tag_parser_t&& parser, general_)
-				{return read_attributes(std::forward<tag_parser_t>(parser)); }
-				template<class tag_parser_t> auto read_attributes(tag_parser_t&& parser) {
-					if (position.state != parse_state::after_tag_name) throw_invalid_read_call("called read_attributes, but not at the beginning of a tag");
+				{return read_element(std::forward<tag_parser_t>(parser)); }
+				template<class tag_parser_t> auto read_element(tag_parser_t&& parser) {
+					if (position.state != parse_state::after_tag_name) throw_invalid_read_call("called read_element, but not at the beginning of a tag");
 					parse_pos saved_pos(position);
 					try {
 						attribute_count = 0;

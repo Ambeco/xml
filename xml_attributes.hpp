@@ -68,17 +68,17 @@ namespace mpd {
 		bool try_read_attribute(attribute_reader& reader, const char* desired_attribute, std::optional<long double>& att, const std::string& found_attribute, std::string&& value)
 		{ return try_read_float_attribute_helper<long double, std::strtold>(reader, desired_attribute, att, found_attribute, std::move(value)); }
 
-		struct read_attributes {
+		struct read_element {
 			attribute_reader& reader_;
 			const std::string& found_attribute_;
 			std::string&& value_;
 			bool done;
-			read_attributes(attribute_reader& reader, const std::string& found_attribute, std::string&& value) 
+			read_element(attribute_reader& reader, const std::string& found_attribute, std::string&& value) 
 				:reader_(reader), found_attribute_(found_attribute), value_(std::move(value)), done(false) {}
 			template<class T>
-			read_attributes& operator()(const char* desired_attribute, std::optional<T>& attribute)
+			read_element& operator()(const char* desired_attribute, std::optional<T>& attribute)
 			{ done = done || try_read_attribute(reader_, desired_attribute, attribute, found_attribute_, std::move(value_)); return *this; }
-			~read_attributes() { if (!done && !std::uncaught_exceptions()) reader_.throw_unexpected("unexpected attribute "s + found_attribute_); }
+			~read_element() { if (!done && !std::uncaught_exceptions()) reader_.throw_unexpected("unexpected attribute "s + found_attribute_); }
 		};
 
 		struct require_attributes {

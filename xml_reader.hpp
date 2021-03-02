@@ -63,10 +63,11 @@ namespace mpd {
 		are three parser contracts, but the majority of the time they are all implemented by
 		a single object. 
 
-		Any parser methods may call throw_unexpected, throw_missing, or throw_invalid_content on
-		the reader parameter, if they  receive an unexpected parameter, are missing an expected
-		parameter, or the content of a parameter is invalid. The parser will throw the exception,
-		containing the line number, column offset, parameters, and callstack.
+		Any parser methods may call parser#throw_unexpected, parser#throw_missing, or 
+		parser#throw_invalid_content on the reader parameter, if they receive an unexpected 
+		parameter, are missing an expected parameter, or the content of a parameter is invalid. 
+		The parser will throw the exception, containing the line number, column offset, parameters, 
+		and a "callstack".
 
 		// For processing a child Element. 
 		// This can be useful for parsing things like `vector<unique_ptr<interface>>` where the xml
@@ -75,12 +76,12 @@ namespace mpd {
 		// It can also be useful for wrapping the parsing of an entire element in a try/catch block.
 		interface child_parser_t {
 			// Called when an element contains a tag.
-			// This method must call reader.read_attributes(tag_parser_t) and return the result, or
-			//  throw an exception.
+			// This method must call reader.read_element(tag_parser_t) to parse the element, and
+			// then return the fully parsed element type to the parent element_parser.
 			// This member is optional: It uses the default implementation shown below, and therefore 
 			// the parser must also implement tag_parser_t.
 			element_type begin_element(tag_reader& reader, const std::string& tag_id)
-			{ return reader.read_attributes(*this); }
+			{ return reader.read_element(*this); }
 		}
 
 		// For processing a Tag
@@ -205,7 +206,7 @@ namespace mpd {
 
 		class tag_reader : public base_reader {
 		public:
-			template<class element_parser_t> auto read_attributes(element_parser_t&& parser);
+			template<class element_parser_t> auto read_element(element_parser_t&& parser);
 		protected:
 			tag_reader(impl::reader& reader) :base_reader(reader) {}
 		};
@@ -233,8 +234,8 @@ namespace mpd {
 		inline void base_reader::throw_invalid_content(const char * details)
 		{ reader_->throw_invalid_content(details); }
 		template<class tag_parser_t>
-		inline auto tag_reader::read_attributes(tag_parser_t&& parser)
-		{ return reader_->read_attributes(std::forward<tag_parser_t>(parser)); }
+		inline auto tag_reader::read_element(tag_parser_t&& parser)
+		{ return reader_->read_element(std::forward<tag_parser_t>(parser)); }
 		template<class element_parser_t>
 		inline auto element_reader::read_element(element_parser_t&& parser)
 		{ return reader_->read_element(std::forward<element_parser_t>(parser), impl::special_{}); }

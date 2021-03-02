@@ -27,9 +27,9 @@ struct three_parser {
 	std::optional<std::string> attr2;
 
 	three begin_element(mpd::xml::tag_reader& reader, const std::string&) 
-	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
+	{ attr1.reset(); attr2.reset(); return reader.read_element(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) 
-	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
+	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	three_parser& begin_content(mpd::xml::attribute_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	three end_element(mpd::xml::base_reader&) {
@@ -43,9 +43,9 @@ struct two_parser {
 	std::vector<std::string> texts;
 
 	two begin_element(mpd::xml::tag_reader& reader, const std::string&) 
-	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
+	{ attr1.reset(); attr2.reset(); return reader.read_element(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
-	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
+	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	two_parser& begin_content(mpd::xml::attribute_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_child_element(mpd::xml::element_reader& reader, const std::string& content) {
@@ -68,9 +68,9 @@ struct one_parser {
 	std::vector<two> nodes;
 
 	one begin_element(mpd::xml::tag_reader& reader, const std::string&) 
-	{ attr1.reset(); attr2.reset(); return reader.read_attributes(*this); }
+	{ attr1.reset(); attr2.reset(); return reader.read_element(*this); }
 	void read_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
-	{ mpd::xml::read_attributes(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
+	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	one_parser& begin_content(mpd::xml::attribute_reader& reader) 
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_child_element(mpd::xml::element_reader& reader, const std::string& content) {
