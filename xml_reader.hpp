@@ -41,6 +41,11 @@ namespace mpd {
 	namespace xml {
 		using namespace std::literals::string_literals;
 		/**
+		This is a superfast, super flexible, lightweight parser of UTF8 xml. 
+		(This means the interface is not untuitive).
+		One of the subtler design goals is to minimize template explosion. Each template method
+		is as small as possible, and virtually all interesting code is in non-template methods.
+
 		Lingo:
 		Tag - The name and attributes within a <> pair. Open tags start an Element, and a close
 			tag ends the Element.  Elemends ending in  /> are considered an open Tag immediately
@@ -48,82 +53,80 @@ namespace mpd {
 		Element - A Node started by an open Tag, and closed by a close Tag.
 		Node - An Element, Whitespace, String, Comment, CDATA, or Processing Instruction.
 
-		To keep this accurate but easy to use, whitespace around tags is considered a separate
-		Node from the String contents within an Element.
+		To begin, construct a mpd::xml::document_reader from a filename and bidirectional iterators
+		for the content. Then one normally calls document_reader#read_document and passes in a 
+		document_parser_t, and the method will return the fully parsed document. Alternatively,
+		if all you care about is the only Element, you may call document_reader#element_document,
+		passing a tag name and a element_parser_t, returning the parsed Element directly.
+		
+		Parsers interpret the attributes and tags for specific data types. Theoretically there
+		are three parser contracts, but the majority of the time they are all implemented by
+		a single object. 
 
-		This is a superfast, lightweight parser of UTF8 xml. You create a document_reader with
-		iterators containing the content, and then call readDocument(...) and pass in a Parser
-		object, to parse the contents of the document. If all you care about is the only 'Node'
-		in the document, you can pass a document_root_parser, and pass in the  expected tag name
-		and Parser object for the child Nodes.
-		A Parser passed to readDocument or readChild is a class that fullfills one
-		attribute_parser_t requirements or the element_parser_t requirements, or both. The separate
-		attribute_parser_t is useful for classes that whos constructors have parameters that will be
-		fullfilled with attributes in the node tag, but is then mutable for processing child Nodes.
-		The parser classes have their methods called, receiving the attributes and then child
-		Nodes. Finally, end_element(...) is called, and the parser should return the fully parsed
-		object. The methods on these parsers are detailed below. These will almost always be a
-		single object togeather, but there may be a case where having them separate is useful, so
-		I've left them as such.
-		Any of these methods may call throw_unexpected, throw_missing, or throw_invalid_content on
+		Any parser methods may call throw_unexpected, throw_missing, or throw_invalid_content on
 		the reader parameter, if they  receive an unexpected parameter, are missing an expected
 		parameter, or the content of a parameter is invalid. The parser will throw the exception,
 		containing the line number, column offset, parameters, and callstack.
 
-		// For processing a tag name. All members optional if also an attribute_parser_t.
+		// For processing a child Element. 
 		// This can be useful for parsing things like `vector<unique_ptr<interface>>` where the xml
-		// may have differing implementations inside the vector contents.
+		// may have differing implementations inside the vector contents, while avoiding dynamic
+		// dispatch.
 		// It can also be useful for wrapping the parsing of an entire element in a try/catch block.
-		interface attribute_tag_t {
-			// Optional. Called when the parser is parsing a new tag. May be used to defer parsing
-			// to a specific parser based on the tag.
-			// If the parser is also a element_parser_t, this ends up being the same return type.
+		interface child_parser_t {
+			// Called when an element contains a tag.
+			// This method must call reader.read_attributes(tag_parser_t) and return the result, or
+			//  throw an exception.
+			// This member is optional: It uses the default implementation shown below, and therefore 
+			// the parser must also implement tag_parser_t.
 			element_type begin_element(tag_reader& reader, const std::string& tag_id)
 			{ return reader.read_attributes(*this); }
 		}
-		// For processing a Tag's Attributes. All members optional if also an element_parser_t.
-		interface attribute_parser_t {
-			// Optional. Called or each tag. If this is not provided, but there is a parameter,
-			// the parser will throw an unexpected_node_exception. Overrides are encouraged to
-			// move from the name and value parameters rather than copying.
+
+		// For processing a Tag
+		interface tag_parser_t {
+			// Called for each attribute in a tag.
+			// This member is optional:  It uses the default implementation shown below, and therefore 
+			// throws if an attribute is encountered.
 			void read_attribute(attribute_reader& reader, const std::string& name, std::string&& value)
 			{ reader.throw_unexpected(); }
-			// Optional IFF the Parser also fullfills element_parser_t. Called when there are no more
-			// attributes. It should return the parser to use for parsing child Nodes.
+			// Called when a Tag is complete and we're about to parse children.
+			// This is rarely useful, but can be handy if you do not know the most derived type until
+			// after parsing all of the attributes. 
+			// This member is optional: It uses the default implementation shown below, and therefore 
+			// the parser must also implement element_parser_t.
 			virtual element_parser_t begin_content(base_reader& reader) {
 				return *this;
 			}
 		}
 		// For processing the child Nodes of an Element.
 		interface element_parser_t {
-			// Optional. Called when the parser is parsing a new child element. Caller should check
-			// the type and tag_name. You must either call reader.readChild(...) and pass a parser
-			// for the child, call one of the reader.throw methods, or throw an exception yourself.
-			// If this is not provided, but there is a child element, the parser will throw an
-			// unexpected_node_exception. 
-			virtual void read_child_element(element_reader& reader, const std::string& child_tag) {
-				if (child_tag == "thing") YOURCODEHERE(reader.read_element(ChildParserType{});
-				else reader.throw_unexpected();
+			// Called for each child Node of an Element.
+			// Usually an implementation will check the child_tag, and then call 
+			// reader#read_element(child_parser_t), and store the returned parsed value.
+			// If the child_rag is not expected, it should call reader.throw_unexpected()
+			// This member is optional:  It uses the default implementation shown below, and therefore 
+			// throws if a child node is encountered.
+			void read_child_element(element_reader& reader, const std::string& child_tag) {
+				reader.throw_unexpected();
 			}
-			// Optional. Called when the parser is parsing a new non-element child node. Caller should
-			// check the type and tag_name. There are no special requirements. Overrides are
-			// encouraged to move from the content parameter rather than copying. If this is not 
-			// provided, but there is a non-whitespace string, the parser will throw an 
-			// unexpected_node_exception. 
-			virtual void read_child_node(base_reader& reader, node_type type, std::string&& content) {
-				if (type == node_type::string_node) YOURCODEHERE(mpd::xml::trim(content));
+			// Called when the parser is parsing a new non-element child node. 
+			// The Caller should check the node_type. There are no special requirements. Overrides are
+			// encouraged to move from the content parameter rather than copying. 
+			// This member is optional:  It uses the default implementation shown below, and therefore
+			// throws if a node besides an empty string is found.
+			void read_child_node(base_reader& reader, node_type type, std::string&& content) {
+				if (type != node_type::string_node || !mpd::xml::trim(content).isEmpty())
+					reader.throw_unexpected();
 			}
-			// Required. This is called when the close Tag is reached. This returns the parsed
-			// information to the parent Element Parser. Presumably this should return the parsed
-			// type, but can return a builder or similar, as long as the parent Element parser is
-			// expecting to receive that type.
-			// If the parser is also a attribute_tag_t, this ends up being the same return type.
+			// This is called when the close Tag is reached, and the element is fully parsed.
+			// Usually this returns a fully parsed object to the child_parser_t#begin_element method. 
+			// Presumably this should return the parsed type, but can return a builder or similar, as 
+			// long as begin_element is expecting to receive that type.
 			virtual element_type end_element(base_reader& reader) {
 				return element;
 			}
 		}
-
-		// There are many sample Parsers in std_xml_parsers.hpp
 		**/
 
 		//Exception for if you call processor.read_child_node from from a finalizer or readXml_attribute
@@ -229,9 +232,9 @@ namespace mpd {
 		{ reader_->throw_missing(type, name, details); }
 		inline void base_reader::throw_invalid_content(const char * details)
 		{ reader_->throw_invalid_content(details); }
-		template<class attribute_parser_t>
-		inline auto tag_reader::read_attributes(attribute_parser_t&& parser)
-		{ return reader_->read_attributes(std::forward<attribute_parser_t>(parser)); }
+		template<class tag_parser_t>
+		inline auto tag_reader::read_attributes(tag_parser_t&& parser)
+		{ return reader_->read_attributes(std::forward<tag_parser_t>(parser)); }
 		template<class element_parser_t>
 		inline auto element_reader::read_element(element_parser_t&& parser)
 		{ return reader_->read_element(std::forward<element_parser_t>(parser), impl::special_{}); }
@@ -266,7 +269,9 @@ namespace mpd {
 
 		struct document_reader {
 			template<class forward_it>
-			explicit document_reader(std::string&& source_name, forward_it begin, forward_it end) :reader_(std::move(source_name), std::in_place_type_t<impl::read_buf_impl<forward_it>>{}, begin, end) {}
+			explicit document_reader(std::string&& source_name, forward_it begin, forward_it end)
+				:reader_(std::move(source_name), std::in_place_type_t<impl::read_buf_impl<forward_it>>{}, begin, end) 
+{}
 			document_reader(const document_reader& nocopy) = delete;
 			document_reader& operator=(const document_reader& nocopy) = delete;
 			template<class document_parser_t> auto read_document(document_parser_t&& parser) 
@@ -278,9 +283,9 @@ namespace mpd {
 
 		};
 
-		template<class tag_parser_t>
+		template<class child_parser_t>
 		struct parser_output {
-			typedef decltype(std::declval<tag_parser_t>().read_element(std::declval<attribute_parser_t>())) type;
+			typedef decltype(std::declval<child_parser_t>().read_element(std::declval<tag_parser_t>())) type;
 		};
 	}
 }
