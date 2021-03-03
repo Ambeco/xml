@@ -49,7 +49,7 @@ struct two_parser {
 	two_parser& begin_content(mpd::xml::attribute_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_child_element(mpd::xml::element_reader& reader, const std::string& content) {
-		if (content == "three") nodes.emplace_back(reader.read_element(three_parser{}));
+		if (content == "three") nodes.emplace_back(reader.read_child(three_parser{}));
 		else reader.throw_unexpected();
 	}
 	void read_child_node(mpd::xml::base_reader& reader, mpd::xml::node_type type, std::string&& content) {
@@ -75,7 +75,7 @@ struct one_parser {
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void read_child_element(mpd::xml::element_reader& reader, const std::string& content) {
 		if (content == "two") {
-			try { nodes.emplace_back(reader.read_element(two_parser{})); }
+			try { nodes.emplace_back(reader.read_child(two_parser{})); }
 			catch (std::runtime_error& e) { std::cerr << "SUCCESSFULLY HANDLED ERROR: " << e.what() << '\n'; }
 		} else reader.throw_unexpected();
 	}
@@ -114,7 +114,7 @@ int main() {
 	mpd::xml::document_reader parser("test literal", std::begin(buffer), std::end(buffer)-1);
 	one data{};
     try {
-		data = parser.read_element("one", one_parser{});
+		data = parser.read_child("one", one_parser{});
     } catch(const std::exception& exc) {
         std::cerr << "INVALID READ: "<<exc.what()<<'\n';
     }

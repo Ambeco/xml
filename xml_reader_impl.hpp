@@ -77,14 +77,14 @@ namespace mpd {
 				};
 			public:
 				template<class child_parser_t>//, typename identity<decltype(tag_parser_t::begin_element)>::type = 0>
-				auto read_element(child_parser_t& parser, special_)
+				auto begin_element(child_parser_t& parser, special_)
 					-> decltype(parser.begin_element(static_cast<tag_reader&>(*this), position.tag_name))
 				{
 					post_condition condition(this, parse_state::after_node, "parser.begin_element must call reader.read_element");
 					return parser.begin_element(static_cast<tag_reader&>(*this), position.tag_name);
 				}
 				template<class tag_parser_t>
-				auto read_element(tag_parser_t&& parser, general_)
+				auto begin_element(tag_parser_t&& parser, general_)
 				{return read_element(std::forward<tag_parser_t>(parser)); }
 				template<class tag_parser_t> auto read_element(tag_parser_t&& parser) {
 					if (position.state != parse_state::after_tag_name) throw_invalid_read_call("called read_element, but not at the beginning of a tag");
@@ -137,10 +137,10 @@ namespace mpd {
 
 				template<class element_parser_t>
 				auto read_child_element(element_parser_t& parser, special_)
-					-> decltype(parser.read_child_element(std::declval<element_reader&>(), std::declval<const std::string&>()))
+					-> decltype(parser.begin_element(std::declval<element_reader&>(), std::declval<const std::string&>()))
 				{
-					post_condition condition(this, parse_state::after_node, "parser.read_child_element should have called reader.read_element(ChildParserType{})");
-					return parser.read_child_element(static_cast<element_reader&>(*this), position.tag_name);
+					post_condition condition(this, parse_state::after_node, "parser.begin_element should have called reader.read_element(ChildParserType{})");
+					return parser.begin_element(static_cast<element_reader&>(*this), position.tag_name);
 				}
 				template<class element_parser_t>
 				void read_child_element(element_parser_t&, general_)
