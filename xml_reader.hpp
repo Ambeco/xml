@@ -42,7 +42,7 @@ namespace mpd {
 		using namespace std::literals::string_literals;
 		/**
 		This is a superfast, super flexible, lightweight parser of UTF8 xml. 
-		(This means the interface is not untuitive).
+		(This means the interface is not intuitive).
 		One of the subtler design goals is to minimize template explosion. Each template method
 		is as small as possible, and virtually all interesting code is in non-template methods.
 
