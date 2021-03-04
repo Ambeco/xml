@@ -75,13 +75,19 @@ namespace mpd {
 		// dispatch.
 		// It can also be useful for wrapping the parsing of an entire element in a try/catch block.
 		interface child_parser_t {
+			// Called right before an element contains a tag.
+			// This is useful for resetting all state, between parsed elements
+			// This member is optional: It uses the default implementation shown below.
+			void reset()
+			{ }
+
 			// Called when an element contains a tag.
 			// This method must call reader.read_element(tag_parser_t) to parse the element, and
 			// then return the fully parsed element type to the parent element_parser.
 			// (or as always, throw an exception)
 			// This member is optional: It uses the default implementation shown below, and therefore 
 			// the parser must also implement tag_parser_t.
-			element_type begin_element(tag_reader& reader, const std::string& tag_id)
+			element_type parse_tag(tag_reader& reader, const std::string& tag_id)
 			{ return reader.read_element(*this); }
 		}
 
@@ -90,14 +96,14 @@ namespace mpd {
 			// Called for each attribute in a tag.
 			// This member is optional:  It uses the default implementation shown below, and therefore 
 			// throws if an attribute is encountered.
-			void read_attribute(attribute_reader& reader, const std::string& name, std::string&& value)
+			void parse_attribute(attribute_reader& reader, const std::string& name, std::string&& value)
 			{ reader.throw_unexpected(); }
 			// Called when a Tag is complete and we're about to parse children.
 			// This is rarely useful, but can be handy if you do not know the most derived type until
 			// after parsing all of the attributes. 
 			// This member is optional: It uses the default implementation shown below, and therefore 
 			// the parser must also implement element_parser_t.
-			virtual element_parser_t begin_content(base_reader& reader) {
+			virtual element_parser_t parse_content(base_reader& reader) {
 				return *this;
 			}
 		}
@@ -110,7 +116,7 @@ namespace mpd {
 			// If the child_tag is not expected, it should call reader.throw_unexpected()
 			// This member is optional:  It uses the default implementation shown below, and therefore 
 			// throws if a child node is encountered.
-			void read_child_element(element_reader& reader, const std::string& child_tag) {
+			void parse_child_element(element_reader& reader, const std::string& child_tag) {
 				reader.throw_unexpected();
 			}
 			// Called when the parser is parsing a new non-element child node. 
@@ -118,21 +124,21 @@ namespace mpd {
 			// encouraged to move from the content parameter rather than copying. 
 			// This member is optional:  It uses the default implementation shown below, and therefore
 			// throws if a node besides an empty string is found.
-			void read_child_node(base_reader& reader, node_type type, std::string&& content) {
+			void parse_child_node(base_reader& reader, node_type type, std::string&& content) {
 				if (type != node_type::string_node || !mpd::xml::trim(content).isEmpty())
 					reader.throw_unexpected();
 			}
 			// This is called when the close Tag is reached, and the element is fully parsed.
-			// Usually this returns a fully parsed object to the child_parser_t#begin_element method. 
+			// Usually this returns a fully parsed object to the child_parser_t#parse_tag method. 
 			// Presumably this should return the parsed type, but can return a builder or similar, as 
-			// long as begin_element is expecting to receive that type.
-			virtual element_type end_element(base_reader& reader) {
+			// long as parse_tag is expecting to receive that type.
+			virtual element_type end_parse(base_reader& reader) {
 				return element;
 			}
 		}
 		**/
 
-		//Exception for if you call processor.read_child_node from from a finalizer or readXml_attribute
+		//Exception for if you call processor.parse_child_node from from a finalizer or readXml_attribute
 		struct invalid_read_call_error : public std::logic_error {
 			invalid_read_call_error(const char* message) : std::logic_error(message) {}
 			invalid_read_call_error(const std::string& message) : std::logic_error(message) {}
@@ -240,26 +246,26 @@ namespace mpd {
 		{ return reader_->read_element(std::forward<tag_parser_t>(parser)); }
 		template<class element_parser_t>
 		inline auto element_reader::read_child(element_parser_t&& parser)
-		{ return reader_->begin_element(std::forward<element_parser_t>(parser), impl::special_{}); }
+		{ return reader_->call_parse_tag(std::forward<element_parser_t>(parser), impl::special_{}); }
 
 		struct IgnoredXmlParser {
-			void read_attribute(attribute_reader&, const std::string&, std::string) {}
-			void read_child_element(element_reader& reader, const std::string& ) {reader.read_child(*this); }
-			void read_child_node(base_reader&, node_type, std::string&&) { }
-			std::nullptr_t end_element(base_reader&) { return nullptr; }
+			void parse_attribute(attribute_reader&, const std::string&, std::string) {}
+			void parse_child_element(element_reader& reader, const std::string& ) {reader.read_child(*this); }
+			void parse_child_node(base_reader&, node_type, std::string&&) { }
+			std::nullptr_t end_parse(base_reader&) { return nullptr; }
 		};
 
 		template<class element_parser_t>
 		struct document_root_parser {
-			typedef decltype(std::declval<element_reader>().read_element(std::declval<element_parser_t>())) return_type;
+			typedef decltype(std::declval<element_reader>().read_child(std::declval<element_parser_t>())) return_type;
 			return_type begin_tag(tag_reader& reader)
 			{ child.reset(); return reader.begin_tag(); }
-			void read_child_element(element_reader& reader, const std::string& tag) {
+			void parse_child_element(element_reader& reader, const std::string& tag) {
 				if ((tag == child_tag_ || child_tag_==nullptr) && !child.has_value())
 					child.emplace(reader.read_child(child_parser_));
 				else reader.throw_unexpected("unexpected root element " + tag);
 			}
-			return_type end_element(base_reader&) { return std::move(child).value(); }
+			return_type end_parse(base_reader&) { return std::move(child).value(); }
 			document_root_parser(const char* child_tag, element_parser_t child_parser)
 				: child_tag_(child_tag), child_parser_(child_parser) {}
 			document_root_parser(const document_root_parser&) = delete;

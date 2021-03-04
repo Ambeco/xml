@@ -220,7 +220,7 @@ namespace mpd {
 					else if (c == '/') return read_close_tag();
 					else if (c == '?') read_processing_instruction(); //   <?xml version="1.0"?>
 					else if (peek("!--")) read_comment();
-					else if (peek("!ATTLIST ")) read_attribute_list();
+					else if (peek("!ATTLIST ")) parse_attribute_list();
 					else if (peek("!DOCTYPE ")) read_doctype();
 					else if (peek("!ELEMENT ")) read_element_type();
 					else if (peek("!NOTATION ")) read_notation();
@@ -343,9 +343,9 @@ namespace mpd {
 				//TODO IMPLEMENT
 				throw_unexpected("Unimplemented read_conditional");
 			}
-			void reader::read_attribute_list() {
+			void reader::parse_attribute_list() {
 				//TODO IMPLEMENT
-				throw_unexpected("Unimplemented read_attribute_list");
+				throw_unexpected("Unimplemented parse_attribute_list");
 			}
 			void reader::read_doctype() {
 				//TODO IMPLEMENT
