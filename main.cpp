@@ -26,8 +26,8 @@ struct three_parser {
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
 
-	three parse_tag(mpd::xml::tag_reader& reader, const std::string&) 
-	{ attr1.reset(); attr2.reset(); return reader.read_element(*this); }
+	void reset() 
+	{ attr1.reset(); }
 	void parse_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) 
 	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	three_parser& parse_content(mpd::xml::attribute_reader& reader)
@@ -42,8 +42,8 @@ struct two_parser {
 	std::vector<three> nodes;
 	std::vector<std::string> texts;
 
-	two parse_tag(mpd::xml::tag_reader& reader, const std::string&) 
-	{ attr1.reset(); attr2.reset(); return reader.read_element(*this); }
+	void reset() 
+	{ attr1.reset(); attr2.reset(); }
 	void parse_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	two_parser& parse_content(mpd::xml::attribute_reader& reader)
@@ -67,8 +67,8 @@ struct one_parser {
 	std::optional<std::string> attr2;
 	std::vector<two> nodes;
 
-	one parse_tag(mpd::xml::tag_reader& reader, const std::string&) 
-	{ attr1.reset(); attr2.reset(); return reader.read_element(*this); }
+	void reset() 
+	{ attr1.reset(); attr2.reset(); }
 	void parse_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	one_parser& parse_content(mpd::xml::attribute_reader& reader) 

@@ -258,8 +258,7 @@ namespace mpd {
 		template<class element_parser_t>
 		struct document_root_parser {
 			typedef decltype(std::declval<element_reader>().read_child(std::declval<element_parser_t>())) return_type;
-			return_type begin_tag(tag_reader& reader)
-			{ child.reset(); return reader.begin_tag(); }
+			void reset() { child.reset(); }
 			void parse_child_element(element_reader& reader, const std::string& tag) {
 				if ((tag == child_tag_ || child_tag_==nullptr) && !child.has_value())
 					child.emplace(reader.read_child(child_parser_));
