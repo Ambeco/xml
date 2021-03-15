@@ -83,6 +83,7 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="xml_parser_builder.hpp" />
     <ClInclude Include="type_erased.hpp" />
     <ClInclude Include="xml_std_parsers.hpp" />
     <ClInclude Include="xml_attributes.hpp" />

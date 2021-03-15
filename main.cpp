@@ -22,7 +22,7 @@ struct one {
 };
 
 //parsers for those classes
-struct three_parser {
+/*struct three_parser {
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
 
@@ -35,7 +35,16 @@ struct three_parser {
 	three end_parse(mpd::xml::base_reader&) {
 		return three{ *std::move(attr1), *std::move(attr2) };
 	}
-};
+};*/
+extern const char attr1_string[] = "attr1";
+extern const char attr2_string[] = "attr2";
+using three_parser = mpd::xml::builder::parser<three,
+	std::tuple<>, //elements
+	std::tuple<	//attributes
+		mpd_xml_builder_attribute(attr1_string, (mpd::xml::impl::strtoi_parser<int, long, std::strtol>), &three::attr1),
+		mpd_xml_builder_attribute(attr2_string, std::move<std::string&&>, &three::attr2)
+	>
+>;
 struct two_parser {
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
@@ -62,6 +71,21 @@ struct two_parser {
 	two end_parse(mpd::xml::attribute_reader&) 
 	{ return two{ *std::move(attr1), *std::move(attr2), std::move(nodes), std::move(texts) }; }
 };
+/*
+Builder would look like this, but builder can't handle comments nor processing nodes
+void add_three_to_two(two& parent, three&& child) {parent.nodes.emplace_back(std::move(child));}
+void add_text_to_two(two& parent, std::string&& child) {parent.texts.emplace_back(std::move(child));}
+using two_parser = mpd::xml::builder::parser<two,
+	std::tuple<	//elements
+		mpd_xml_builder_element_repeating("three", three_parser, add_three_to_two)
+	>,
+	std::tuple<	//attributes
+		mpd_xml_builder_attribute(attr1_string, (mpd::xml::impl::strtoi_parser<int, long, std::strtol>), &two::attr1),
+		mpd_xml_builder_attribute(attr2_string, std::move<std::string&&>, &two::attr2)
+	>,
+	mpd_xml_builder_text(std::move<std::string&&>, add_text_to_two) //texts
+>;
+*/
 struct one_parser {
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
@@ -84,6 +108,22 @@ struct one_parser {
 	one end_parse(mpd::xml::attribute_reader&) 
 	{ return one{ *std::move(attr1), *std::move(attr2), std::move(nodes) }; }
 };
+/*
+Builder would look like this, but builder doesn't catch that exception
+void add_two_to_one(one& parent, three&& child) {parent.nodes.emplace_back(std::move(child));}
+void add_text_to_one(one& parent, std::string&& child) {parent.texts.emplace_back(std::move(child));}
+using one_parser = mpd::xml::builder::parser<one,
+	std::tuple<	//elements
+		mpd_xml_builder_element_repeating("two", two_parser, add_two_to_one)
+	>,
+	std::tuple<	//attributes
+		mpd_xml_builder_attribute(attr1_string, (mpd::xml::impl::strtoi_parser<int, long, std::strtol>), &one::attr1),
+		mpd_xml_builder_attribute(attr2_string, std::move<std::string&&>,&one::attr2)
+	>,
+	mpd_xml_builder_text(std::move<std::string&&>, add_text_to_one)	//texts
+>;
+*/
+
 
 int main() {
     char buffer[] =

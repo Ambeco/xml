@@ -189,6 +189,10 @@ namespace mpd {
 		};
 
 		enum class node_type { attribute_node, processing_node, element_node, string_node, comment_node };
+		static constexpr char* node_type_strs[] = {"attribute_node", "processing_node", "element_node", "string_node", "comment_node"};
+		inline const char* node_type_to_s(node_type type) {
+			return node_type_strs[static_cast<int>(type)];
+		}
 
 		namespace impl { class reader; }
 
