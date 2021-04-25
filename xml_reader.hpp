@@ -85,6 +85,9 @@ namespace mpd {
 			// This method must call reader.read_element(tag_parser_t) to parse the element, and
 			// then return the fully parsed element type to the parent element_parser.
 			// (or as always, throw an exception)
+			// Additional parameters passed to read_element will be passed through to the tag_parser_t
+			// and element_parser_t methods. This can be used to keep state on the stack, and keep the
+			// parsers themselves stateless
 			// This member is optional: It uses the default implementation shown below, and therefore 
 			// the parser must also implement tag_parser_t.
 			element_type parse_tag(tag_reader& reader, const std::string& tag_id)
@@ -103,7 +106,7 @@ namespace mpd {
 			// after parsing all of the attributes. 
 			// This member is optional: It uses the default implementation shown below, and therefore 
 			// the parser must also implement element_parser_t.
-			virtual element_parser_t parse_content(base_reader& reader) {
+			virtual element_parser_t parse_content(base_reader& reader, ...) {
 				return *this;
 			}
 		}
@@ -116,7 +119,7 @@ namespace mpd {
 			// If the child_tag is not expected, it should call reader.throw_unexpected()
 			// This member is optional:  It uses the default implementation shown below, and therefore 
 			// throws if a child node is encountered.
-			void parse_child_element(element_reader& reader, const std::string& child_tag) {
+			void parse_child_element(element_reader& reader, const std::string& child_tag, ...) {
 				reader.throw_unexpected();
 			}
 			// Called when the parser is parsing a new non-element child node. 
@@ -124,7 +127,7 @@ namespace mpd {
 			// encouraged to move from the content parameter rather than copying. 
 			// This member is optional:  It uses the default implementation shown below, and therefore
 			// throws if a node besides an empty string is found.
-			void parse_child_node(base_reader& reader, node_type type, std::string&& content) {
+			void parse_child_node(base_reader& reader, node_type type, std::string&& content, ...) {
 				if (type != node_type::string_node || !mpd::xml::trim(content).isEmpty())
 					reader.throw_unexpected();
 			}
@@ -132,7 +135,7 @@ namespace mpd {
 			// Usually this returns a fully parsed object to the child_parser_t#parse_tag method. 
 			// Presumably this should return the parsed type, but can return a builder or similar, as 
 			// long as parse_tag is expecting to receive that type.
-			virtual element_type end_parse(base_reader& reader) {
+			virtual element_type end_parse(base_reader& reader, ...) {
 				return element;
 			}
 		}
@@ -218,7 +221,7 @@ namespace mpd {
 
 		class tag_reader : public base_reader {
 		public:
-			template<class element_parser_t> auto read_element(element_parser_t&& parser);
+			template<class element_parser_t, class...Args> auto read_element(element_parser_t&& parser, Args&&...args);
 		protected:
 			tag_reader(impl::reader& reader) :base_reader(reader) {}
 		};
@@ -245,9 +248,9 @@ namespace mpd {
 		{ reader_->throw_missing(type, name, details); }
 		inline void base_reader::throw_invalid_content(const char * details)
 		{ reader_->throw_invalid_content(details); }
-		template<class tag_parser_t>
-		inline auto tag_reader::read_element(tag_parser_t&& parser)
-		{ return reader_->read_element(std::forward<tag_parser_t>(parser)); }
+		template<class element_parser_t, class...Args>
+		inline auto tag_reader::read_element(element_parser_t&& parser, Args&&...args)
+		{ return reader_->read_element(std::forward<tag_parser_t>(parser), args...); } //deliberately not using std::forward
 		template<class element_parser_t>
 		inline auto element_reader::read_child(element_parser_t&& parser)
 		{ return reader_->call_parse_tag(std::forward<element_parser_t>(parser), impl::special_{}); }
