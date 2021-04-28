@@ -28,6 +28,7 @@ struct one {
 
 	void reset() 
 	{ attr1.reset(); }
+	three_parser parse_tag(mpd::xml::tag_reader& reader, const std::string&) { return reader.read_element(*this); }
 	void parse_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value) 
 	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
 	three_parser& parse_content(mpd::xml::attribute_reader& reader)
@@ -53,9 +54,10 @@ struct two_parser {
 
 	void reset() 
 	{ attr1.reset(); attr2.reset(); }
+	two parse_tag(mpd::xml::tag_reader& reader, const std::string&) { return reader.read_element(*this); }
 	void parse_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
-	two_parser& parse_content(mpd::xml::attribute_reader& reader)
+	two_parser& parse_content(mpd::xml::base_reader& reader)
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void parse_child_element(mpd::xml::element_reader& reader, const std::string& content) {
 		if (content == "three") nodes.emplace_back(reader.read_child(three_parser{}));
@@ -93,9 +95,10 @@ struct one_parser {
 
 	void reset() 
 	{ attr1.reset(); attr2.reset(); }
+	one parse_tag(mpd::xml::tag_reader& reader, const std::string&) { return reader.read_element(*this); }
 	void parse_attribute(mpd::xml::attribute_reader& reader, const std::string& name, std::string&& value)
 	{ mpd::xml::read_element(reader, name, std::move(value))("attr1", attr1)("attr2", attr2); }
-	one_parser& parse_content(mpd::xml::attribute_reader& reader) 
+	one_parser& parse_content(mpd::xml::base_reader& reader) 
 	{ mpd::xml::require_attributes(reader)("attr1", attr1)("attr2", attr2); return *this; }
 	void parse_child_element(mpd::xml::element_reader& reader, const std::string& content) {
 		if (content == "two") {
@@ -103,7 +106,7 @@ struct one_parser {
 			catch (std::runtime_error& e) { std::cerr << "SUCCESSFULLY HANDLED ERROR: " << e.what() << '\n'; }
 		} else reader.throw_unexpected();
 	}
-	void parse_child_node(mpd::xml::element_reader&, mpd::xml::node_type type, std::string&& content) 
+	void parse_child_node(mpd::xml::base_reader&, mpd::xml::node_type type, std::string&& content) 
 	{ if (type == mpd::xml::node_type::string_node) std::cout << "one-str: " << content << '\n'; }
 	one end_parse(mpd::xml::attribute_reader&) 
 	{ return one{ *std::move(attr1), *std::move(attr2), std::move(nodes) }; }
@@ -163,3 +166,4 @@ int main() {
 
     return 0;
 }
+ 

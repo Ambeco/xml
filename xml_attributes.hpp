@@ -82,8 +82,8 @@ namespace mpd {
 		};
 
 		struct require_attributes {
-			attribute_reader& reader_;
-			require_attributes(attribute_reader& reader) :reader_(reader) {}
+			base_reader& reader_;
+			require_attributes(base_reader& reader) :reader_(reader) {}
 			template<class T>
 			require_attributes& operator()(const char* name, const std::optional<T>& attribute)
 			{ if (!attribute.has_value()) reader_.throw_missing(mpd::xml::node_type::attribute_node, name); return *this;}

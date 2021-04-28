@@ -94,6 +94,7 @@ namespace mpd {
 					(std::get<element_parsers_t>(element_parsers).reset(),...); 
 					(std::get<attribute_parsers_t>(attribute_parsers).reset(),...); 
 				}
+				T parse_tag(tag_reader& reader, const std::string&) { return reader.read_element(*this); }
 				void parse_attribute(attribute_reader& reader, const std::string& name, std::string&& value) {
 					bool parsed = (
 						(std::get<attribute_parsers_t>(attribute_parsers).name() == name 
@@ -101,6 +102,7 @@ namespace mpd {
 						|| ...);
 					if (!parsed) reader.throw_unexpected("unexpected attribute " + name);
 				}
+				parser parse_content(base_reader&) { return *this; }
 				void parse_child_element(element_reader& reader, const std::string& child_tag) {
 					bool parsed = (
 						(std::get<element_parsers_t>(element_parsers).name() == name 
