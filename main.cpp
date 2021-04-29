@@ -23,6 +23,7 @@ struct one {
 
 //parsers for those classes
 /*struct three_parser {
+	using element_type = three;
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
 
@@ -47,6 +48,7 @@ using three_parser = mpd::xml::builder::parser<three,
 	>
 >;
 struct two_parser {
+	using element_type = two;
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
 	std::vector<three> nodes;
@@ -89,6 +91,7 @@ using two_parser = mpd::xml::builder::parser<two,
 >;
 */
 struct one_parser {
+	using element_type = one;
 	std::optional<int> attr1;
 	std::optional<std::string> attr2;
 	std::vector<two> nodes;

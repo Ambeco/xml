@@ -35,7 +35,7 @@ namespace mpd {
 				bool parse_attribute(Container& container, attribute_reader& reader, std::string&& content)
 				{ 
 					if (found) reader.throw_unexpected("duplicate attribute "s + name_);
-					auto attr = impl::invoke_stot<stot_t, stot>(reader, std::move(content));
+					auto&& attr = impl::invoke_stot<stot_t, stot>(reader, std::move(content));
 					impl::invoke_add_item<set_attr_t, set_attr>(reader, container, std::move(attr));
 					return true;
 				}
@@ -52,7 +52,7 @@ namespace mpd {
 				template<class Container>
 				bool parse_child_element(Container& container, element_reader& reader) {
 					if (++found > max) reader.throw_unexpected("too many "s + name_);
-					auto child = reader.read_child(child_parser_t{});
+					auto&& child = reader.read_child(child_parser_t{});
 					impl::invoke_add_item<add_child_t, add_child>(reader, container, std::move(child));
 					return true;
 				}
@@ -67,14 +67,15 @@ namespace mpd {
 			struct text {
 				template<class Container>
 				void parse_child_text(Container& container, base_reader& reader, std::string&& content) {
-					auto item = impl::invoke_stot<s_to_t_t, s_to_t>(reader, std::move(content));
+					auto&& item = impl::invoke_stot<s_to_t_t, s_to_t>(reader, std::move(content));
 					impl::invoke_add_item<add_text_t, add_text>(reader, container, std::move(item));
 				}
 			};
 #define mpd_xml_builder_text(s_to_t, add_text) mpd::xml::builder::text<decltype(s_to_t), s_to_t, decltype(add_text), add_text>
 
 			struct no_text_parser {
-				void parse_child_text(base_reader& reader, std::string&&) {
+				template<class Container>
+				void parse_child_text(Container&, base_reader& reader, std::string&&) {
 					reader.throw_unexpected();
 				}
 			};
@@ -84,42 +85,44 @@ namespace mpd {
 			template<class T, class... element_parsers_t, class... attribute_parsers_t, class text_parser_t>
 			struct parser<T, std::tuple<element_parsers_t...>, std::tuple<attribute_parsers_t...>, text_parser_t> {
 			private:
-				T item;
 				std::tuple<element_parsers_t...> element_parsers;
 				std::tuple<attribute_parsers_t...> attribute_parsers;
 				text_parser_t text_parser;
 			public:
+				using element_type = T;
 				void reset() { 
-					item = {}; 
 					(std::get<element_parsers_t>(element_parsers).reset(),...); 
 					(std::get<attribute_parsers_t>(attribute_parsers).reset(),...); 
 				}
-				T parse_tag(tag_reader& reader, const std::string&) { return reader.read_element(*this); }
-				void parse_attribute(attribute_reader& reader, const std::string& name, std::string&& value) {
+				T parse_tag(tag_reader& reader, const std::string&) { 
+					T item;
+					return reader.read_element(*this, item); 
+				}
+				void parse_attribute(attribute_reader& reader, const std::string& name, std::string&& value, T& item) {
 					bool parsed = (
 						(std::get<attribute_parsers_t>(attribute_parsers).name() == name 
 							&& std::get<attribute_parsers_t>(attribute_parsers).parse_attribute(item, reader, std::move(value)))
 						|| ...);
 					if (!parsed) reader.throw_unexpected("unexpected attribute " + name);
 				}
-				parser parse_content(base_reader&) { return *this; }
-				void parse_child_element(element_reader& reader, const std::string& child_tag) {
+				parser parse_content(base_reader&, T&) { return *this; }
+				void parse_child_element(element_reader& reader, const std::string& child_tag, T& item) {
 					bool parsed = (
 						(std::get<element_parsers_t>(element_parsers).name() == name 
 							&& std::get<element_parsers_t>(element_parsers).parse_child_element(item, reader))
 						|| ...);
 					if (!parsed) reader.throw_unexpected("unexpected tag " + child_tag);
 				}
-				void parse_child_node(base_reader& reader, node_type type, std::string&& content) {
+				void parse_child_node(base_reader& reader, node_type type, std::string&& content, T& item) {
 					if (type != node_type::string_node)
 						reader.throw_unexpected("unexpected node type ");
 					else {
 						std::string_view view = mpd::trim(content);
 						if (!view.empty())
-							text_parser.parse_child_text(reader, std::string(view));
+							text_parser.parse_child_text(item, reader, std::string(view));
 					}
 				}
-				T&& end_parse(base_reader& reader) {
+				T&& end_parse(base_reader& reader, T& item) {
 					(std::get<element_parsers_t>(element_parsers).end(reader), ...);
 					return std::move(item);
 				}
@@ -130,6 +133,7 @@ namespace mpd {
 				T item;
 				bool found;
 			public:
+				using element_type = T;
 				void reset() { item = {}; found = false;}
 				void parse_child_node(base_reader& reader, node_type type, std::string&& content) {
 					if (type != node_type::string_node || found)

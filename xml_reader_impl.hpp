@@ -81,19 +81,20 @@ namespace mpd {
 				}
 			public:
 				template<class child_parser_t, class...Args>//, typename identity<decltype(tag_parser_t::parse_tag)>::type = 0>
-				auto call_parse_tag(child_parser_t& parser, Args&&...args) {
+				typename std::remove_reference_t<child_parser_t>::element_type call_parse_tag(child_parser_t& parser, Args&&...args) {
 					call_reset_parser(parser);
 					post_condition condition(this, parse_state::after_node, "parser.parse_tag must call reader.read_element");
 					return parser.parse_tag(static_cast<tag_reader&>(*this), position.tag_name, args...);
 				}
-				template<class tag_parser_t, class...Args> auto read_element(tag_parser_t&& parser, Args&&...args) {
+				template<class tag_parser_t, class...Args> 
+				typename std::remove_reference_t<tag_parser_t>::element_type read_element(tag_parser_t&& parser, Args&&...args) {
 					if (position.state != parse_state::after_tag_name) throw_invalid_read_call("called read_element, but not at the beginning of a tag");
 					parse_pos saved_pos(position);
 					try {
 						attribute_count = 0;
 						while (next_attribute())
 							call_parse_attribute(parser, args...);
-						return read_contents(call_parse_content(std::forward<tag_parser_t>(parser), args...), args...);
+						return read_contents(call_parse_content(parser, args...), args...);
 					}
 					catch (const std::exception&) {
 						position = std::move(saved_pos);
@@ -103,7 +104,8 @@ namespace mpd {
 					}
 				}
 			protected:
-				template<class element_parser_t, class...Args> auto read_contents(element_parser_t&& parser, Args&&...args) {
+				template<class element_parser_t, class...Args> 
+				typename std::remove_reference_t<element_parser_t>::element_type read_contents(element_parser_t&& parser, Args&&...args) {
 					if (position.state != parse_state::document_begin
 						&& position.state != parse_state::before_tag_finish
 						&& position.state != parse_state::after_node)
@@ -111,10 +113,10 @@ namespace mpd {
 					parse_pos saved_pos(position);
 					try {
 						while (next_node()) {
-							if (node.first == node_type::element_node) call_parse_child_element(parser);
+							if (node.first == node_type::element_node) call_parse_child_element(parser, args...);
 							else call_parse_child_node(parser, args...);
 						}
-						return std::forward<element_parser_t>(parser).end_parse(static_cast<attribute_reader&>(*this), args...);
+						return parser.end_parse(static_cast<attribute_reader&>(*this), args...);
 					}
 					catch (const std::exception&) {
 						position = std::move(saved_pos);
@@ -125,19 +127,19 @@ namespace mpd {
 				}
 
 				template<class tag_parser_t, class...Args>
-				auto call_parse_attribute(tag_parser_t& parser, Args&&...args) {
+				void call_parse_attribute(tag_parser_t& parser, Args&&...args) {
 					post_condition condition(this, parse_state::after_attribute, "parser.parse_attribute somehow did something invalid"); 
-					return parser.parse_attribute(static_cast<attribute_reader&>(*this), const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second), args...);
+					parser.parse_attribute(static_cast<attribute_reader&>(*this), const_cast<const std::string&>(attribute_set[attribute_count-1]), std::move(node.second), args...);
 				}
 				template<class element_parser_t, class...Args>
-				auto call_parse_child_element(element_parser_t& parser, Args&&...args) {
+				void call_parse_child_element(element_parser_t& parser, Args&&...args) {
 					post_condition condition(this, parse_state::after_node, "parser.parse_child_element should have called reader.read_element(ChildParserType{})");
-					return parser.parse_child_element(static_cast<element_reader&>(*this), position.tag_name, args...);
+					parser.parse_child_element(static_cast<element_reader&>(*this), position.tag_name, args...);
 				}
 				template<class element_parser_t, class...Args>
-				auto call_parse_child_node(element_parser_t& parser, Args&&...args) {
+				void call_parse_child_node(element_parser_t& parser, Args&&...args) {
 					post_condition condition(this, position.state, "parser.parse_child_node somehow did something invalid");
-					return parser.parse_child_node(static_cast<base_reader&>(static_cast<attribute_reader&>(*this)), node.first, std::move(node.second), args...);
+					parser.parse_child_node(static_cast<base_reader&>(static_cast<attribute_reader&>(*this)), node.first, std::move(node.second), args...);
 				}
 				template<class element_parser_t, class...Args>//, typename identity<decltype(element_parser_t::parse_content)>::type = 0>
 				auto call_parse_content(element_parser_t&& parser, Args&&...args) { 

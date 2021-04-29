@@ -75,6 +75,9 @@ namespace mpd {
 		// dispatch.
 		// It can also be useful for wrapping the parsing of an entire element in a try/catch block.
 		interface child_parser_t {
+			// Required typedef that defines the parsed item type
+			using element_type = ...;
+
 			// Called right before an element contains a tag.
 			// This is useful for resetting all state, between parsed elements.
 			void reset()
@@ -95,6 +98,9 @@ namespace mpd {
 
 		// For processing a Tag
 		interface tag_parser_t {
+			// Required typedef that defines the parsed item type
+			using element_type = ...;
+
 			// Called for each attribute in a tag.
 			// One normal implementation is shown below, that throws if an attribute is encountered.
 			void parse_attribute(attribute_reader& reader, const std::string& name, std::string&& value)
@@ -111,6 +117,9 @@ namespace mpd {
 		}
 		// For processing the child Nodes of an Element.
 		interface element_parser_t {
+			// Required typedef that defines the parsed item type
+			using element_type = ...;
+
 			// Called for each child Node of an Element.
 			// An implementation must check the child_tag, and then call 
 			// reader#read_child(child_parser_t), and process the parsed value.
@@ -218,7 +227,8 @@ namespace mpd {
 
 		class tag_reader : public base_reader {
 		public:
-			template<class element_parser_t, class...Args> auto read_element(element_parser_t&& parser, Args&&...args);
+			template<class element_parser_t, class...Args> 
+			typename std::remove_reference_t<element_parser_t>::element_type read_element(element_parser_t&& parser, Args&&...args);
 		protected:
 			tag_reader(impl::reader& reader) :base_reader(reader) {}
 		};
@@ -230,7 +240,8 @@ namespace mpd {
 
 		class element_reader : public base_reader {
 		public:
-			template<class element_parser_t> auto read_child(element_parser_t&& parser);
+			template<class element_parser_t> 
+			typename std::remove_reference_t<element_parser_t>::element_type read_child(element_parser_t&& parser);
 		protected:
 			element_reader(impl::reader& reader) : base_reader(reader) {}
 		};
@@ -246,13 +257,14 @@ namespace mpd {
 		inline void base_reader::throw_invalid_content(const char * details)
 		{ reader_->throw_invalid_content(details); }
 		template<class element_parser_t, class...Args>
-		inline auto tag_reader::read_element(element_parser_t&& parser, Args&&...args)
+		inline typename std::remove_reference_t<element_parser_t>::element_type tag_reader::read_element(element_parser_t&& parser, Args&&...args)
 		{ return reader_->read_element(parser, args...); } //deliberately not using std::forward
 		template<class element_parser_t>
-		inline auto element_reader::read_child(element_parser_t&& parser)
+		inline typename std::remove_reference_t<element_parser_t>::element_type element_reader::read_child(element_parser_t&& parser)
 		{ return reader_->call_parse_tag(parser); }
 
 		struct IgnoredXmlParser {
+			using element_type = std::nullptr_t;
 			void reset() {}
 			std::nullptr_t parse_tag(tag_reader& reader, const std::string&) { return reader.read_element(*this); }
 			void parse_attribute(attribute_reader&, const std::string&, std::string) {}
@@ -264,7 +276,7 @@ namespace mpd {
 
 		template<class element_parser_t>
 		struct document_root_parser {
-			typedef decltype(std::declval<element_reader>().read_child(std::declval<element_parser_t>())) return_type;
+			using element_type = typename std::remove_reference_t<element_parser_t>::element_type;
 			void reset() { child.reset(); }
 			void parse_child_element(element_reader& reader, const std::string& tag) {
 				if ((tag == child_tag_ || child_tag_==nullptr) && !child.has_value())
@@ -275,7 +287,7 @@ namespace mpd {
 				if (type != node_type::string_node || mpd::trim(content).size()>0)
 					reader.throw_unexpected();
 			}
-			return_type end_parse(base_reader&) { return std::move(child).value(); }
+			element_type end_parse(base_reader&) { return std::move(child).value(); }
 			document_root_parser(const char* child_tag, element_parser_t child_parser)
 				: child_tag_(child_tag), child_parser_(child_parser) {}
 			document_root_parser(const document_root_parser&) = delete;
@@ -283,7 +295,7 @@ namespace mpd {
 		private:
 			const char* child_tag_;
 			element_parser_t child_parser_;
-			std::optional<return_type> child;
+			std::optional<element_type> child;
 		};
 
 		struct document_reader {
@@ -293,10 +305,12 @@ namespace mpd {
 {}
 			document_reader(const document_reader& nocopy) = delete;
 			document_reader& operator=(const document_reader& nocopy) = delete;
-			template<class document_parser_t> auto read_document(document_parser_t&& parser) 
-			{ return reader_.read_contents(std::forward<document_parser_t>(parser)); }
-			template<class element_parser_t> auto read_child(const char* tag, element_parser_t&& parser)
-			{ return reader_.read_contents(document_root_parser(tag, std::forward<element_parser_t>(parser))); }
+			template<class document_parser_t> 
+			typename std::remove_reference_t<document_parser_t>::element_type read_document(document_parser_t&& parser) 
+			{ return reader_.read_contents(parser); }
+			template<class element_parser_t> 
+			typename std::remove_reference_t<element_parser_t>::element_type read_child(const char* tag, element_parser_t&& parser)
+			{ return reader_.read_contents(document_root_parser(tag, parser)); }
 		private:
 			impl::reader reader_;
 
